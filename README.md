@@ -1,4 +1,6 @@
-# tap-mysql
+# tap-mysql-koszti
+
+**THIS IS A FORK OF tap-mysql by singer.io**
 
 [![PyPI version](https://badge.fury.io/py/tap-mysql.svg)](https://badge.fury.io/py/tap-mysql)
 [![CircleCI Build Status](https://circleci.com/gh/singer-io/tap-mysql.png)](https://circleci.com/gh/singer-io/tap-mysql)
@@ -15,17 +17,18 @@ $ tap-mysql --config config.json --properties properties.json --state state.json
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
-- [Usage](#usage)
-  - [Installation](#installation)
-  - [Have a source database](#have-a-source-database)
-  - [Create the configuration file](#create-the-configuration-file)
-  - [Discovery mode](#discovery-mode)
-  - [Field selection](#field-selection)
-  - [Sync mode](#sync-mode)
-- [Replication methods and state file](#replication-methods-and-state-file)
-  - [Full Table](#full-table)
-  - [Incremental](#incremental)
-    - [Example](#example)
+- [tap-mysql-koszti](#tap-mysql-koszti)
+  - [Usage](#usage)
+    - [Install](#install)
+    - [Have a source database](#have-a-source-database)
+    - [Create the configuration file](#create-the-configuration-file)
+    - [Discovery mode](#discovery-mode)
+    - [Field selection](#field-selection)
+    - [Sync mode](#sync-mode)
+  - [Replication methods and state file](#replication-methods-and-state-file)
+    - [Full Table](#full-table)
+    - [Incremental](#incremental)
+      - [Example](#example)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
