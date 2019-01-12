@@ -393,7 +393,10 @@ def resolve_catalog(discovered_catalog, streams_to_sync):
         result.streams.append(CatalogEntry(
             tap_stream_id=catalog_entry.tap_stream_id,
             metadata=catalog_entry.metadata,
-            stream=catalog_entry.stream,
+            stream={
+                'id': catalog_entry.stream,
+                'tap_stream_id': catalog_entry.tap_stream_id
+            },
             table=catalog_entry.table,
             schema=Schema(
                 type='object',
@@ -498,7 +501,7 @@ def write_schema_message(catalog_entry, bookmark_properties=[]):
     key_properties = common.get_key_properties(catalog_entry)
 
     singer.write_message(singer.SchemaMessage(
-        stream=common.catalog_entry_to_stream_dict(catalog_entry),
+        stream=catalog_entry.stream,
         schema=catalog_entry.schema.to_dict(),
         key_properties=key_properties,
         bookmark_properties=bookmark_properties

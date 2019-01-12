@@ -160,7 +160,7 @@ def row_to_singer_record(catalog_entry, version, db_column_map, row, time_extrac
             row_to_persist[column_name] = val
 
     return singer.RecordMessage(
-        stream=common.catalog_entry_to_stream_dict(catalog_entry),
+        stream=catalog_entry.stream,
         record=row_to_persist,
         version=version,
         time_extracted=time_extracted)
