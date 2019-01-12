@@ -498,7 +498,7 @@ def write_schema_message(catalog_entry, bookmark_properties=[]):
     key_properties = common.get_key_properties(catalog_entry)
 
     singer.write_message(singer.SchemaMessage(
-        stream=catalog_entry.stream,
+        stream=common.catalog_entry_to_stream_dict(catalog_entry),
         schema=catalog_entry.schema.to_dict(),
         key_properties=key_properties,
         bookmark_properties=bookmark_properties

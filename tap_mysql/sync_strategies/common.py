@@ -38,6 +38,13 @@ def stream_is_selected(stream):
     return selected_md
 
 
+def catalog_entry_to_stream_dict(catalog_entry):
+    return {
+        'id': catalog_entry.stream,
+        'tap_stream_id': catalog_entry.tap_stream_id
+    }
+
+
 def property_is_selected(stream, property_name):
     md_map = metadata.to_map(stream.metadata)
     return singer.should_sync_field(
@@ -120,7 +127,7 @@ def row_to_singer_record(catalog_entry, version, row, columns, time_extracted):
     rec = dict(zip(columns, row_to_persist))
 
     return singer.RecordMessage(
-        stream=catalog_entry.stream,
+        stream=catalog_entry_to_stream_dict(catalog_entry),
         record=rec,
         version=version,
         time_extracted=time_extracted)
