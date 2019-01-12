@@ -393,10 +393,7 @@ def resolve_catalog(discovered_catalog, streams_to_sync):
         result.streams.append(CatalogEntry(
             tap_stream_id=catalog_entry.tap_stream_id,
             metadata=catalog_entry.metadata,
-            stream={
-                'id': catalog_entry.stream,
-                'tap_stream_id': catalog_entry.tap_stream_id
-            },
+            stream=catalog_entry.tap_stream_id,
             table=catalog_entry.table,
             schema=Schema(
                 type='object',
