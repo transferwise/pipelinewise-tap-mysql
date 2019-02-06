@@ -83,6 +83,8 @@ def generate_select_sql(catalog_entry, columns):
         escaped_db,
         escaped_table)
 
+    # escape percent signs
+    select_sql = select_sql.replace('%', '%%')
     return select_sql
 
 
@@ -103,8 +105,11 @@ def row_to_singer_record(catalog_entry, version, row, columns, time_extracted):
 
         elif isinstance(elem, bytes):
             # for BIT value, treat 0 as False and anything else as True
-            boolean_representation = elem != b'\x00'
-            row_to_persist += (boolean_representation,)
+            if 'boolean' in property_type:
+                boolean_representation = elem != b'\x00'
+                row_to_persist += (boolean_representation,)
+            else:
+                row_to_persist += (elem.hex(),)
 
         elif 'boolean' in property_type or property_type == 'boolean':
             if elem is None:
