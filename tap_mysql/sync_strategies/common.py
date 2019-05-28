@@ -105,11 +105,8 @@ def row_to_singer_record(catalog_entry, version, row, columns, time_extracted):
 
         elif isinstance(elem, bytes):
             # for BIT value, treat 0 as False and anything else as True
-            if 'boolean' in property_type:
-                boolean_representation = elem != b'\x00'
-                row_to_persist += (boolean_representation,)
-            else:
-                row_to_persist += (elem.hex(),)
+            boolean_representation = elem != b'\x00'
+            row_to_persist += (boolean_representation,)
 
         elif 'boolean' in property_type or property_type == 'boolean':
             if elem is None:
