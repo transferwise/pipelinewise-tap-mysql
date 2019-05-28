@@ -1,36 +1,16 @@
-# tap-mysql-koszti
+# pipelinewise-tap-mysql
 
-**THIS IS A FORK OF tap-mysql by singer.io**
-
-[![PyPI version](https://badge.fury.io/py/tap-mysql.svg)](https://badge.fury.io/py/tap-mysql)
-[![CircleCI Build Status](https://circleci.com/gh/singer-io/tap-mysql.png)](https://circleci.com/gh/singer-io/tap-mysql)
+[![PyPI version](https://badge.fury.io/py/pipelinewise-tap-mysql.svg)](https://badge.fury.io/py/pipelinewise-tap-mysql)
 
 [Singer](https://www.singer.io/) tap that extracts data from a [MySQL](https://www.mysql.com/) database and produces JSON-formatted data following the [Singer spec](https://github.com/singer-io/getting-started/blob/master/docs/SPEC.md).
 
-```bash
-$ mkvirtualenv -p python3 tap-mysql
-$ pip install tap-mysql
-$ tap-mysql --config config.json --discover
-$ tap-mysql --config config.json --properties properties.json --state state.json
-```
+This is a [PipelineWise](https://transferwise.github.io/pipelinewise) compatible tap connector.
 
-<!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+## How to use it
 
-- [tap-mysql-koszti](#tap-mysql-koszti)
-  - [Usage](#usage)
-    - [Install](#install)
-    - [Have a source database](#have-a-source-database)
-    - [Create the configuration file](#create-the-configuration-file)
-    - [Discovery mode](#discovery-mode)
-    - [Field selection](#field-selection)
-    - [Sync mode](#sync-mode)
-  - [Replication methods and state file](#replication-methods-and-state-file)
-    - [Full Table](#full-table)
-    - [Incremental](#incremental)
-      - [Example](#example)
+The recommended method of running this tap is to use it from [PipelineWise](https://transferwise.github.io/pipelinewise). When running it from PipelineWise you don't need to configure this tap with JSON files and most of things are automated. Please check the related documentation at [Tap MySQL](https://transferwise.github.io/pipelinewise/connectors/taps/mysql.html)
 
-<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+If you want to run this [Singer Tap](https://singer.io) independently please read further.
 
 ## Usage
 
@@ -39,6 +19,10 @@ data from a table. It assumes that you can connect to and read from a MySQL
 database.
 
 ### Install
+
+First, make sure Python 3 is installed on your system or follow these
+installation instructions for [Mac](http://docs.python-guide.org/en/latest/starting/install3/osx/) or
+[Ubuntu](https://www.digitalocean.com/community/tutorials/how-to-install-python-3-and-set-up-a-local-programming-environment-on-ubuntu-16-04).
 
 ```bash
 $ mkvirtualenv -p python3 tap-mysql
@@ -423,4 +407,4 @@ This invocation extracts any data since (and including) the
 
 ---
 
-Copyright &copy; 2017 Stitch
+Based on Stitch documentation

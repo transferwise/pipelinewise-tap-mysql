@@ -4,9 +4,9 @@ from setuptools import setup
 
 setup(name='pipelinewise-tap-mysql',
       version='1.0.4',
-      description='Singer.io tap for extracting data from MySQL - fork of tap-mysql 1.9.24 with custom changes',
+      description='Singer.io tap for extracting data from MySQL - PipelineWise compatible',
       author='Stitch',
-      url='https://singer.io',
+      url='https://github.com/transferwise/pipelinewise-tap-mysql',
       classifiers=['Programming Language :: Python :: 3 :: Only'],
       py_modules=['tap_mysql'],
       install_requires=[
