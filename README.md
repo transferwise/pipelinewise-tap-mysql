@@ -1,6 +1,8 @@
 # pipelinewise-tap-mysql
 
 [![PyPI version](https://badge.fury.io/py/pipelinewise-tap-mysql.svg)](https://badge.fury.io/py/pipelinewise-tap-mysql)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pipelinewise-tap-mysql.svg)](https://pypi.org/project/pipelinewise-tap-mysql/)
+[![License: MIT](https://img.shields.io/badge/License-GPLv3-yellow.svg)](https://opensource.org/licenses/GPL-3.0)
 
 [Singer](https://www.singer.io/) tap that extracts data from a [MySQL](https://www.mysql.com/) database and produces JSON-formatted data following the [Singer spec](https://github.com/singer-io/getting-started/blob/master/docs/SPEC.md).
 
@@ -24,18 +26,20 @@ First, make sure Python 3 is installed on your system or follow these
 installation instructions for [Mac](http://docs.python-guide.org/en/latest/starting/install3/osx/) or
 [Ubuntu](https://www.digitalocean.com/community/tutorials/how-to-install-python-3-and-set-up-a-local-programming-environment-on-ubuntu-16-04).
 
+It's recommended to use a virtualenv:
+
 ```bash
-$ mkvirtualenv -p python3 tap-mysql
-$ pip install tap-mysql
+  python3 -m venv venv
+  pip install pipelinewise-tap-mysql
 ```
 
 or
 
 ```bash
-$ git clone git@github.com:singer-io/tap-mysql.git
-$ cd tap-mysql
-$ mkvirtualenv -p python3 tap-mysql
-$ python install .
+  python3 -m venv venv
+  . venv/bin/activate
+  pip install --upgrade pip
+  pip install .
 ```
 
 ### Have a source database
