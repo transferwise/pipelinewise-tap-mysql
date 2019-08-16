@@ -7,7 +7,10 @@ setup(name='pipelinewise-tap-mysql',
       description='Singer.io tap for extracting data from MySQL - PipelineWise compatible',
       author='Stitch',
       url='https://github.com/transferwise/pipelinewise-tap-mysql',
-      classifiers=['Programming Language :: Python :: 3 :: Only'],
+      classifiers=[
+          'License :: OSI Approved :: GNU Affero General Public License v3',
+          'Programming Language :: Python :: 3 :: Only'
+      ],
       py_modules=['tap_mysql'],
       install_requires=[
           'attrs==16.3.0',
