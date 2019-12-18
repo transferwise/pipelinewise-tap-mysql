@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # pylint: disable=too-many-arguments,duplicate-code,too-many-locals
-
+import codecs
 import copy
 import datetime
 import singer
@@ -104,9 +104,8 @@ def row_to_singer_record(catalog_entry, version, row, columns, time_extracted):
             row_to_persist += (timedelta_from_epoch.isoformat() + '+00:00',)
 
         elif isinstance(elem, bytes):
-            # for BIT value, treat 0 as False and anything else as True
-            boolean_representation = elem != b'\x00'
-            row_to_persist += (boolean_representation,)
+            # encode bytes as hex
+            row_to_persist += (codecs.encode(elem, 'hex'),)
 
         elif 'boolean' in property_type or property_type == 'boolean':
             if elem is None:

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # pylint: disable=duplicate-code,too-many-locals,too-many-arguments,too-many-branches
-
+import codecs
 import copy
 
 import datetime
@@ -8,6 +8,7 @@ import pytz
 import tzlocal
 
 import singer
+from chardet import detect
 from singer import metadata
 from singer import utils
 from singer.schema import Schema
@@ -145,6 +146,10 @@ def row_to_singer_record(catalog_entry, version, db_column_map, row, time_extrac
             timedelta_from_epoch = epoch + val
             row_to_persist[column_name] = timedelta_from_epoch.isoformat() + '+00:00'
 
+        elif isinstance(val, bytes):
+            # encode bytes as hex
+            row_to_persist[column_name] = codecs.encode(val, 'hex')
+
         elif 'boolean' in property_type or property_type == 'boolean':
             if val is None:
                 boolean_representation = None
@@ -233,7 +238,7 @@ def update_bookmarks(state, binlog_streams_map, log_file, log_pos):
 
 
 def get_db_column_types(event):
-    return {c.name:c.type for c in  event.columns}
+    return {c.name:c.type for c in event.columns}
 
 
 def handle_write_rows_event(event, catalog_entry, state, columns, rows_saved, time_extracted):

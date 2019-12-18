@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 # pylint: disable=missing-docstring,not-an-iterable,too-many-locals,too-many-arguments,too-many-branches,invalid-name,duplicate-code,too-many-statements
 
-import datetime
 import collections
 import itertools
-from itertools import dropwhile
 import copy
 
 import pendulum
@@ -15,7 +13,6 @@ import singer
 import singer.metrics as metrics
 import singer.schema
 
-from singer import bookmarks
 from singer import metadata
 from singer import utils
 from singer.schema import Schema
@@ -52,14 +49,7 @@ LOGGER = singer.get_logger()
 pymysql.converters.conversions[pendulum.Pendulum] = pymysql.converters.escape_datetime
 
 
-STRING_TYPES = set([
-    'char',
-    'enum',
-    'longtext',
-    'mediumtext',
-    'text',
-    'varchar'
-])
+STRING_TYPES = {'char', 'enum', 'longtext', 'mediumtext', 'text', 'varchar'}
 
 BYTES_FOR_INTEGER_TYPE = {
     'tinyint': 1,
@@ -69,9 +59,11 @@ BYTES_FOR_INTEGER_TYPE = {
     'bigint': 8
 }
 
-FLOAT_TYPES = set(['float', 'double'])
+FLOAT_TYPES = {'float', 'double'}
 
-DATETIME_TYPES = set(['datetime', 'timestamp', 'date', 'time'])
+DATETIME_TYPES = {'datetime', 'timestamp', 'date', 'time'}
+
+BINARY_TYPES = {'binary', 'varbinary'}
 
 
 def schema_for_column(c):
@@ -114,6 +106,10 @@ def schema_for_column(c):
     elif data_type in DATETIME_TYPES:
         result.type = ['null', 'string']
         result.format = 'date-time'
+
+    elif data_type in BINARY_TYPES:
+        result.type = ['null', 'string']
+        result.format = 'binary'
 
     else:
         result = Schema(None,
