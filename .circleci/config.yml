@@ -22,7 +22,7 @@ references:
         command: --default-authentication-plugin=mysql_native_password --log-bin=mysql-bin --binlog-format=ROW
 
 jobs:
-  test:
+  build:
     <<: *container_config
 
     steps:
