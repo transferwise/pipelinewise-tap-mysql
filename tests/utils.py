@@ -9,10 +9,10 @@ DB_NAME='tap_mysql_test'
 
 def get_db_config():
     config = {}
-    config['host'] = os.environ.get('TAP_MYSQL_HOST')
-    config['port'] = int(os.environ.get('TAP_MYSQL_PORT'))
-    config['user'] = os.environ.get('TAP_MYSQL_USER')
-    config['password'] = os.environ.get('TAP_MYSQL_PASSWORD')
+    config['host'] = os.environ['TAP_MYSQL_HOST']
+    config['port'] = int(os.environ['TAP_MYSQL_PORT'])
+    config['user'] = os.environ['TAP_MYSQL_USER']
+    config['password'] = os.environ['TAP_MYSQL_PASSWORD']
     config['charset'] = 'utf8'
     if not config['password']:
         del config['password']

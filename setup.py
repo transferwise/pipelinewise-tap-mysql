@@ -20,6 +20,13 @@ setup(name='pipelinewise-tap-mysql',
           'backoff==1.3.2',
           'mysql-replication==0.21',
       ],
+      extras_require={
+          'test': [
+              'nose==1.3.*',
+              'pylint==2.4.*',
+              'nose-cov==1.6'
+          ]
+      },
       entry_points='''
           [console_scripts]
           tap-mysql=tap_mysql:main
