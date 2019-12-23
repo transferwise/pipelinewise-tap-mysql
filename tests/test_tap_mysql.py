@@ -1,10 +1,9 @@
 import unittest
-import pymysql
-import tap_mysql
-import copy
+
 import singer
-import os
 import singer.metadata
+
+import tap_mysql
 from tap_mysql.connection import connect_with_backoff
 
 try:
@@ -15,24 +14,19 @@ except ImportError:
 import tap_mysql.sync_strategies.binlog as binlog
 import tap_mysql.sync_strategies.common as common
 
-from pymysqlreplication import BinLogStreamReader
-from pymysqlreplication.event import RotateEvent
-from pymysqlreplication.row_event import (
-        DeleteRowsEvent,
-        UpdateRowsEvent,
-        WriteRowsEvent,
-    )
-
 from singer.schema import Schema
 
 LOGGER = singer.get_logger()
 
 SINGER_MESSAGES = []
 
+
 def accumulate_singer_messages(message):
     SINGER_MESSAGES.append(message)
 
+
 singer.write_message = accumulate_singer_messages
+
 
 class TestTypeMapping(unittest.TestCase):
 
@@ -246,6 +240,7 @@ class TestSelectsAppropriateColumns(unittest.TestCase):
                          set(['a', 'c']),
                          'Keep automatic as well as selected, available columns.')
 
+
 class TestSchemaMessages(unittest.TestCase):
 
     def runTest(self):
@@ -281,12 +276,14 @@ class TestSchemaMessages(unittest.TestCase):
 
         self.assertEqual(schema_message.schema['properties'].keys(), set(expectedKeys))
 
+
 def currently_syncing_seq(messages):
     return ''.join(
         [(m.value.get('currently_syncing', '_') or '_')[-1]
          for m in messages
          if isinstance(m, singer.StateMessage)]
     )
+
 
 class TestCurrentStream(unittest.TestCase):
 
@@ -342,6 +339,7 @@ class TestCurrentStream(unittest.TestCase):
         tap_mysql.do_sync(self.conn, {}, self.catalog, state)
 
         self.assertRegexpMatches(currently_syncing_seq(SINGER_MESSAGES), '^b+c+a+_+')
+
 
 def message_types_and_versions(messages):
     message_types = []
@@ -405,7 +403,6 @@ class TestStreamVersionFullTable(unittest.TestCase):
         tap_mysql.do_sync(self.conn, {}, self.catalog, state)
 
         (message_types, versions) = message_types_and_versions(SINGER_MESSAGES)
-
 
         self.assertEqual(['RecordMessage', 'ActivateVersionMessage'], message_types)
         self.assertEqual(versions, [12345, 12345])
@@ -480,10 +477,10 @@ class TestIncrementalReplication(unittest.TestCase):
             stream.metadata = [
                 {'breadcrumb': (),
                  'metadata': {
-                    'selected': True,
+                     'selected': True,
                      'table-key-properties': [],
-                    'database-name': 'tap_mysql_test'
-                }},
+                     'database-name': 'tap_mysql_test'
+                 }},
                 {'breadcrumb': ('properties', 'val'), 'metadata': {'selected': True}}
             ]
 
@@ -512,7 +509,6 @@ class TestIncrementalReplication(unittest.TestCase):
             message_types)
         self.assertTrue(isinstance(versions[0], int))
         self.assertEqual(versions[0], versions[1])
-
 
     def test_with_state(self):
         state = {
@@ -588,6 +584,7 @@ class TestIncrementalReplication(unittest.TestCase):
         tap_mysql.do_sync(self.conn, {}, self.catalog, state)
 
         self.assertEqual(state['bookmarks']['tap_mysql_test-incremental']['version'], 1)
+
 
 class TestBinlogReplication(unittest.TestCase):
 
@@ -737,12 +734,11 @@ class TestBinlogReplication(unittest.TestCase):
         expected_exception_message = "Unable to replicate stream({}) with binlog because log file {} does not exist.".format(
             stream,
             log_file
-            )
+        )
 
         try:
             tap_mysql.do_sync(self.conn, {}, self.catalog, state)
         except Exception as e:
-            failed = True
             exception_message = str(e)
             LOGGER.error(exception_message)
 
@@ -840,6 +836,7 @@ class TestViews(unittest.TestCase):
             {'a_table': ['id'],
              'a_view': None})
 
+
 class TestEscaping(unittest.TestCase):
 
     def setUp(self):
@@ -898,7 +895,7 @@ class TestUnsupportedPK(unittest.TestCase):
         self.assertEqual(primary_keys, {'good_pk_tab': ['good_pk'], 'bad_pk_tab': []})
 
 
-if __name__== "__main__":
+if __name__ == "__main__":
     test1 = TestBinlogReplication()
     test1.setUp()
     test1.test_binlog_stream()

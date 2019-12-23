@@ -44,7 +44,7 @@ def insert_record(conn, table_name, record):
 def singer_write_message_no_table_2(message):
     global TABLE_2_RECORD_COUNT
 
-    if isinstance(message, singer.RecordMessage) and message.stream == 'table_2':
+    if isinstance(message, singer.RecordMessage) and message.stream == 'tap_mysql_test-table_2':
         TABLE_2_RECORD_COUNT = TABLE_2_RECORD_COUNT + 1
 
         if TABLE_2_RECORD_COUNT > 1:
@@ -131,10 +131,10 @@ class BinlogInterruption(unittest.TestCase):
                              if isinstance(m, singer.RecordMessage)]
 
         self.assertEqual(record_messages_1,
-                         [['table_1', {'id': 1, 'bar': 'abc', 'foo': 100}],
-                          ['table_1', {'id': 2, 'bar': 'def', 'foo': 200}],
-                          ['table_1', {'id': 3, 'bar': 'ghi', 'foo': 300}],
-                          ['table_2', {'id': 1, 'bar': 'ghi', 'foo': 300}]])
+                         [['tap_mysql_test-table_1', {'id': 1, 'bar': 'abc', 'foo': 100}],
+                          ['tap_mysql_test-table_1', {'id': 2, 'bar': 'def', 'foo': 200}],
+                          ['tap_mysql_test-table_1', {'id': 3, 'bar': 'ghi', 'foo': 300}],
+                          ['tap_mysql_test-table_2', {'id': 1, 'bar': 'ghi', 'foo': 300}]])
 
         self.assertEqual(state['currently_syncing'], 'tap_mysql_test-table_2')
 
@@ -169,11 +169,11 @@ class BinlogInterruption(unittest.TestCase):
                              if isinstance(m, singer.RecordMessage)]
 
         self.assertEqual(record_messages_2,
-                         [['table_2', {'id': 2, 'bar': 'def', 'foo': 200}],
-                          ['table_2', {'id': 3, 'bar': 'abc', 'foo': 100}],
-                          ['table_1', {'id': 1, 'bar': 'abc', 'foo': 100}],
-                          ['table_1', {'id': 2, 'bar': 'def', 'foo': 200}],
-                          ['table_1', {'id': 3, 'bar': 'ghi', 'foo': 300}]])
+                         [['tap_mysql_test-table_2', {'id': 2, 'bar': 'def', 'foo': 200}],
+                          ['tap_mysql_test-table_2', {'id': 3, 'bar': 'abc', 'foo': 100}],
+                          ['tap_mysql_test-table_1', {'id': 1, 'bar': 'abc', 'foo': 100}],
+                          ['tap_mysql_test-table_1', {'id': 2, 'bar': 'def', 'foo': 200}],
+                          ['tap_mysql_test-table_1', {'id': 3, 'bar': 'ghi', 'foo': 300}]])
 
         self.assertIsNone(state['currently_syncing'])
 
@@ -201,7 +201,6 @@ class BinlogInterruption(unittest.TestCase):
         for record in new_table_2_records:
             insert_record(self.conn, 'table_2', record)
 
-        TABLE_2_RECORD_COUNT = 0
         SINGER_MESSAGES.clear()
 
         tap_mysql.do_sync(self.conn, test_utils.get_db_config(), self.catalog, state)
@@ -212,11 +211,11 @@ class BinlogInterruption(unittest.TestCase):
                              if isinstance(m, singer.RecordMessage)]
 
         self.assertEqual(record_messages_3,
-                         [['table_1', {'id': 1, 'bar': 'abc', 'foo': 100}],
-                          ['table_1', {'id': 2, 'bar': 'def', 'foo': 200}],
-                          ['table_1', {'id': 3, 'bar': 'ghi', 'foo': 300}],
-                          ['table_2', {'id': 4, 'bar': 'jkl', 'foo': 400}],
-                          ['table_2', {'id': 5, 'bar': 'mno', 'foo': 500}]])
+                         [['tap_mysql_test-table_1', {'id': 1, 'bar': 'abc', 'foo': 100}],
+                          ['tap_mysql_test-table_1', {'id': 2, 'bar': 'def', 'foo': 200}],
+                          ['tap_mysql_test-table_1', {'id': 3, 'bar': 'ghi', 'foo': 300}],
+                          ['tap_mysql_test-table_2', {'id': 4, 'bar': 'jkl', 'foo': 400}],
+                          ['tap_mysql_test-table_2', {'id': 5, 'bar': 'mno', 'foo': 500}]])
 
         self.assertIsNone(state['currently_syncing'])
 
@@ -280,23 +279,9 @@ class FullTableInterruption(unittest.TestCase):
                           ['table_2', {'id': 1, 'bar': 'ghi', 'foo': 300}]
                          ])
 
-        expected_state_1 = {
-            'currently_syncing': 'tap_mysql_test-table_2',
-            'bookmarks': {
-                'tap_mysql_test-table_2': {
-                    'last_pk_fetched': {'id': 1},
-                    'max_pk_values': {'id': 3}
-                },
-                'tap_mysql_test-table_1': {
-                    'initial_full_table_complete': True
-                }
-            }
-        }
-
         failed_syncing_table_2 = False
         singer.write_message = singer_write_message_ok
 
-        TABLE_2_RECORD_COUNT = 0
         SINGER_MESSAGES.clear()
 
         tap_mysql.do_sync(self.conn, {}, self.catalog, state)
