@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-# pylint: disable=duplicate-code,too-many-locals,simplifiable-if-expression
+# pylint: disable=too-many-locals,missing-function-docstring
 
-import copy
 import singer
 from singer import metadata
 
 import tap_mysql.sync_strategies.binlog as binlog
 import tap_mysql.sync_strategies.common as common
-
-from tap_mysql.connection import connect_with_backoff, MySQLConnection
+from tap_mysql.connection import connect_with_backoff
 
 LOGGER = singer.get_logger()
 
@@ -45,10 +43,10 @@ def pks_are_auto_incrementing(mysql_conn, catalog_entry):
 
     with connect_with_backoff(mysql_conn) as open_conn:
         with open_conn.cursor() as cur:
-            for pk in key_properties:
+            for primary_key in key_properties:
                 cur.execute(sql.format(database_name,
-                                          catalog_entry.table,
-                                          pk))
+                                       catalog_entry.table,
+                                       primary_key))
 
                 result = cur.fetchone()
 
@@ -73,12 +71,12 @@ def get_max_pk_values(cursor, catalog_entry):
     """
 
     select_column_clause = ", ".join(escaped_columns)
-    order_column_clause = ", ".join([pk + " DESC" for pk in escaped_columns])
+    order_column_clause = ", ".join([primary_key + " DESC" for primary_key in escaped_columns])
 
     cursor.execute(sql.format(select_column_clause,
-                           escaped_db,
-                           escaped_table,
-                           order_column_clause))
+                              escaped_db,
+                              escaped_table,
+                              order_column_clause))
     result = cursor.fetchone()
 
     if result:
@@ -88,12 +86,10 @@ def get_max_pk_values(cursor, catalog_entry):
 
     return max_pk_values
 
+
 def generate_pk_clause(catalog_entry, state):
     key_properties = common.get_key_properties(catalog_entry)
     escaped_columns = [common.escape(c) for c in key_properties]
-
-    where_clause = " AND ".join([pk + " > `{}`" for pk in escaped_columns])
-    order_by_clause = ", ".join(['`{}`, ' for pk in escaped_columns])
 
     max_pk_values = singer.get_bookmark(state,
                                         catalog_entry.tap_stream_id,
@@ -119,12 +115,11 @@ def generate_pk_clause(catalog_entry, state):
     return sql
 
 
-
 def sync_table(mysql_conn, catalog_entry, state, columns, stream_version):
     common.whitelist_bookmark_keys(generate_bookmark_keys(catalog_entry), catalog_entry.tap_stream_id, state)
 
     bookmark = state.get('bookmarks', {}).get(catalog_entry.tap_stream_id, {})
-    version_exists = True if 'version' in bookmark else False
+    version_exists = 'version' in bookmark
 
     initial_full_table_complete = singer.get_bookmark(state,
                                                       catalog_entry.tap_stream_id,
@@ -156,9 +151,8 @@ def sync_table(mysql_conn, catalog_entry, state, columns, stream_version):
                                                     catalog_entry.tap_stream_id,
                                                     'max_pk_values') or get_max_pk_values(cur, catalog_entry)
 
-
                 if not max_pk_values:
-                    LOGGER.info("No max value for auto-incrementing PK found for table {}".format(catalog_entry.table))
+                    LOGGER.info("No max value for auto-incrementing PK found for table %s", catalog_entry.table)
                 else:
                     state = singer.write_bookmark(state,
                                                   catalog_entry.tap_stream_id,

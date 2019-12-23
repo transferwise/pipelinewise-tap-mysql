@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# pylint: disable=too-many-arguments,duplicate-code,too-many-locals
+# pylint: disable=missing-function-docstring,too-many-arguments,too-many-locals
 import codecs
 import copy
 import datetime
@@ -14,8 +14,7 @@ LOGGER = singer.get_logger()
 
 def escape(string):
     if '`' in string:
-        raise Exception("Can't escape identifier {} because it contains a backtick"
-                        .format(string))
+        raise Exception(f"Can't escape identifier {string} because it contains a backtick")
     return '`' + string + '`'
 
 
@@ -78,10 +77,7 @@ def generate_select_sql(catalog_entry, columns):
     escaped_table = escape(catalog_entry.table)
     escaped_columns = [escape(c) for c in columns]
 
-    select_sql = 'SELECT {} FROM {}.{}'.format(
-        ','.join(escaped_columns),
-        escaped_db,
-        escaped_table)
+    select_sql = f'SELECT {",".join(escaped_columns)} FROM {escaped_db}.{escaped_table}'
 
     # escape percent signs
     select_sql = select_sql.replace('%', '%%')
@@ -128,11 +124,10 @@ def row_to_singer_record(catalog_entry, version, row, columns, time_extracted):
 
 
 def whitelist_bookmark_keys(bookmark_key_set, tap_stream_id, state):
-    for bk in [non_whitelisted_bookmark_key
-               for non_whitelisted_bookmark_key
-               in state.get('bookmarks', {}).get(tap_stream_id, {}).keys()
-               if non_whitelisted_bookmark_key not in bookmark_key_set]:
-        singer.clear_bookmark(state, tap_stream_id, bk)
+    for bookmark_key in [non_whitelisted_bookmark_key for
+                         non_whitelisted_bookmark_key in state.get('bookmarks', {}).get(tap_stream_id, {}).keys()
+                         if non_whitelisted_bookmark_key not in bookmark_key_set]:
+        singer.clear_bookmark(state, tap_stream_id, bookmark_key)
 
 
 def sync_query(cursor, catalog_entry, state, select_sql, columns, stream_version, params):
@@ -178,7 +173,7 @@ def sync_query(cursor, catalog_entry, state, select_sql, columns, stream_version
                                                     'max_pk_values')
 
                 if max_pk_values:
-                    last_pk_fetched = {k:v for k,v in record_message.record.items()
+                    last_pk_fetched = {k:v for k, v in record_message.record.items()
                                        if k in key_properties}
 
                     state = singer.write_bookmark(state,

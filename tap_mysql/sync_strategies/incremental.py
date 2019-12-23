@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-# pylint: disable=duplicate-code
+# pylint: disable=missing-function-docstring
 
 import pendulum
 import singer
 from singer import metadata
 
-from tap_mysql.connection import connect_with_backoff, MySQLConnection
+from tap_mysql.connection import connect_with_backoff
 import tap_mysql.sync_strategies.common as common
 
 LOGGER = singer.get_logger()
@@ -58,9 +58,8 @@ def sync_table(mysql_conn, catalog_entry, state, columns):
                 if catalog_entry.schema.properties[replication_key_metadata].format == 'date-time':
                     replication_key_value = pendulum.parse(replication_key_value)
 
-                select_sql += ' WHERE `{}` >= %(replication_key_value)s ORDER BY `{}` ASC'.format(
-                    replication_key_metadata,
-                    replication_key_metadata)
+                select_sql += f" WHERE `{replication_key_metadata}` >= %(replication_key_value)s " \
+                              f"ORDER BY `{replication_key_metadata}` ASC"
 
                 params['replication_key_value'] = replication_key_value
             elif replication_key_metadata is not None:
