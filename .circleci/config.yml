@@ -28,7 +28,7 @@ jobs:
     steps:
       - checkout
       - run:
-          name: 'Setup virtual env'
+          name: 'Setup virtual environment'
           command: |
             python3 -m venv ./virtualenvs/tap-mysql
             . ./virtualenvs/tap-mysql/bin/activate
