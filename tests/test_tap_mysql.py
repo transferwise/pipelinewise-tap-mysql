@@ -319,7 +319,7 @@ class TestCurrentStream(unittest.TestCase):
         SINGER_MESSAGES.clear()
 
         tap_mysql.do_sync(self.conn, {}, self.catalog, state)
-        self.assertRegexpMatches(currently_syncing_seq(SINGER_MESSAGES), '^a+b+c+_+')
+        self.assertRegex(currently_syncing_seq(SINGER_MESSAGES), '^a+b+c+_+')
 
     def test_start_at_currently_syncing(self):
         state = {
@@ -338,7 +338,7 @@ class TestCurrentStream(unittest.TestCase):
         SINGER_MESSAGES.clear()
         tap_mysql.do_sync(self.conn, {}, self.catalog, state)
 
-        self.assertRegexpMatches(currently_syncing_seq(SINGER_MESSAGES), '^b+c+a+_+')
+        self.assertRegex(currently_syncing_seq(SINGER_MESSAGES), '^b+c+a+_+')
 
 
 def message_types_and_versions(messages):
@@ -566,6 +566,8 @@ class TestIncrementalReplication(unittest.TestCase):
 
         tap_mysql.do_sync(self.conn, {}, self.catalog, state)
 
+        print(state)
+
         self.assertEqual(state['bookmarks']['tap_mysql_test-incremental']['replication_key'], 'val')
         self.assertEqual(state['bookmarks']['tap_mysql_test-incremental']['replication_key_value'], 3)
         self.assertEqual(state['bookmarks']['tap_mysql_test-incremental']['version'], 1)
@@ -647,7 +649,7 @@ class TestBinlogReplication(unittest.TestCase):
 
     def test_initial_full_table(self):
         state = {}
-        expected_log_file, expected_log_pos = binlog.fetch_current_log_file_and_pos(self.conn)
+        binlog.fetch_current_log_file_and_pos(self.conn)
 
         global SINGER_MESSAGES
         SINGER_MESSAGES.clear()
@@ -673,14 +675,12 @@ class TestBinlogReplication(unittest.TestCase):
                           singer.StateMessage])
 
         activate_version_message_1 = list(filter(
-            lambda m: isinstance(m, singer.ActivateVersionMessage) and m.stream == 'binlog_1',
+            lambda m: isinstance(m, singer.ActivateVersionMessage) and m.stream == 'tap_mysql_test-binlog_1',
             SINGER_MESSAGES))[0]
 
         activate_version_message_2 = list(filter(
-            lambda m: isinstance(m, singer.ActivateVersionMessage) and m.stream == 'binlog_2',
+            lambda m: isinstance(m, singer.ActivateVersionMessage) and m.stream == 'tap_mysql_test-binlog_2',
             SINGER_MESSAGES))[0]
-
-        record_messages = list(filter(lambda m: isinstance(m, singer.RecordMessage), SINGER_MESSAGES))
 
         self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_1', 'log_file'))
         self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_1', 'log_pos'))
@@ -703,7 +703,8 @@ class TestBinlogReplication(unittest.TestCase):
 
         failed = False
         exception_message = None
-        expected_exception_message = "Unable to replicate stream({}) with binlog because it is a view.".format(self.catalog.streams[0].stream)
+        expected_exception_message = "Unable to replicate stream(tap_mysql_test-{}) with binlog because it is a view.".format(
+            self.catalog.streams[0].stream)
 
         try:
             tap_mysql.do_sync(self.conn, {}, self.catalog, state)
@@ -714,7 +715,6 @@ class TestBinlogReplication(unittest.TestCase):
 
         self.assertTrue(failed)
         self.assertEqual(expected_exception_message, exception_message)
-
 
     def test_fail_if_log_file_does_not_exist(self):
         log_file = 'chicken'
@@ -741,7 +741,6 @@ class TestBinlogReplication(unittest.TestCase):
         except Exception as e:
             exception_message = str(e)
             LOGGER.error(exception_message)
-
 
     def test_binlog_stream(self):
         global SINGER_MESSAGES
@@ -770,16 +769,16 @@ class TestBinlogReplication(unittest.TestCase):
                           singer.RecordMessage,
                           singer.StateMessage])
 
-        self.assertEqual([('binlog_1', 1, '2017-06-01T00:00:00+00:00', False),
-                          ('binlog_1', 2, '2017-06-20T00:00:00+00:00', False),
-                          ('binlog_1', 3, '2017-09-22T00:00:00+00:00', False),
-                          ('binlog_2', 1, '2017-10-22T00:00:00+00:00', False),
-                          ('binlog_2', 2, '2017-11-10T00:00:00+00:00', False),
-                          ('binlog_2', 3, '2017-12-10T00:00:00+00:00', False),
-                          ('binlog_1', 3, '2018-06-18T00:00:00+00:00', False),
-                          ('binlog_2', 2, '2018-06-18T00:00:00+00:00', False),
-                          ('binlog_1', 2, '2017-06-20T00:00:00+00:00', True),
-                          ('binlog_2', 1, '2017-10-22T00:00:00+00:00', True)],
+        self.assertEqual([('tap_mysql_test-binlog_1', 1, '2017-06-01T00:00:00+00:00', False),
+                          ('tap_mysql_test-binlog_1', 2, '2017-06-20T00:00:00+00:00', False),
+                          ('tap_mysql_test-binlog_1', 3, '2017-09-22T00:00:00+00:00', False),
+                          ('tap_mysql_test-binlog_2', 1, '2017-10-22T00:00:00+00:00', False),
+                          ('tap_mysql_test-binlog_2', 2, '2017-11-10T00:00:00+00:00', False),
+                          ('tap_mysql_test-binlog_2', 3, '2017-12-10T00:00:00+00:00', False),
+                          ('tap_mysql_test-binlog_1', 3, '2018-06-18T00:00:00+00:00', False),
+                          ('tap_mysql_test-binlog_2', 2, '2018-06-18T00:00:00+00:00', False),
+                          ('tap_mysql_test-binlog_1', 2, '2017-06-20T00:00:00+00:00', True),
+                          ('tap_mysql_test-binlog_2', 1, '2017-10-22T00:00:00+00:00', True)],
                          [(m.stream,
                            m.record['id'],
                            m.record['updated'],
@@ -873,17 +872,19 @@ class TestEscaping(unittest.TestCase):
         self.assertTrue(isinstance(record_message, singer.RecordMessage))
         self.assertEqual(record_message.record, {'b c': 1})
 
-class TestUnsupportedPK(unittest.TestCase):
+
+class TestSupportedPK(unittest.TestCase):
 
     def setUp(self):
         self.conn = test_utils.get_test_connection()
 
         with connect_with_backoff(self.conn) as open_conn:
             with open_conn.cursor() as cursor:
-                cursor.execute('CREATE TABLE bad_pk_tab (bad_pk BINARY, age INT, PRIMARY KEY (bad_pk))') # BINARY not presently supported
-                cursor.execute('CREATE TABLE good_pk_tab (good_pk INT, age INT, PRIMARY KEY (good_pk))')
-                cursor.execute("INSERT INTO bad_pk_tab (bad_pk, age) VALUES ('a', 100)")
-                cursor.execute("INSERT INTO good_pk_tab (good_pk, age) VALUES (1, 100)")
+                cursor.execute(
+                    # BINARY is presently supported
+                    'CREATE TABLE good_pk_tab (good_pk BINARY, age INT, PRIMARY KEY (good_pk))')
+
+                cursor.execute("INSERT INTO good_pk_tab (good_pk, age) VALUES (BINARY('a'), 20), (BINARY('b'), 30)")
 
     def runTest(self):
         catalog = test_utils.discover_catalog(self.conn, {})
@@ -892,7 +893,7 @@ class TestUnsupportedPK(unittest.TestCase):
         for c in catalog.streams:
             primary_keys[c.table] = singer.metadata.to_map(c.metadata).get((), {}).get('table-key-properties')
 
-        self.assertEqual(primary_keys, {'good_pk_tab': ['good_pk'], 'bad_pk_tab': []})
+        self.assertEqual(primary_keys, {'good_pk_tab': ['good_pk']})
 
 
 if __name__ == "__main__":
