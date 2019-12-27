@@ -1,39 +1,52 @@
 version: 2
+
+references:
+  container_config: &container_config
+    docker:
+      # Main Python container
+      - image: circleci/python:3.6.2
+        environment:
+          TAP_MYSQL_PORT: 3306
+          TAP_MYSQL_USER: root
+          TAP_MYSQL_PASSWORD: my-secret-passwd
+          TAP_MYSQL_HOST: test_mysql
+
+      # MariaDB service container image used as test source database
+      - image: mariadb:10.2.26
+        name: test_mysql
+        environment:
+          MYSQL_ROOT_PASSWORD: my-secret-passwd
+          MYSQL_DATABASE: tap_mysql_test
+        ports:
+          - 3306:3306
+        command: --default-authentication-plugin=mysql_native_password --log-bin=mysql-bin --binlog-format=ROW
+
 jobs:
   build:
-    docker:
-      - image: 218546966473.dkr.ecr.us-east-1.amazonaws.com/circle-ci:tap-tester
+    <<: *container_config
+
     steps:
       - checkout
       - run:
-          name: 'Get environment variables'
+          name: 'Setup virtual environment'
           command: |
-            aws s3 cp s3://com-stitchdata-dev-deployment-assets/environments/tap-tester/sandbox dev_env.sh
+            python3 -m venv ./virtualenvs/tap-mysql
+            . ./virtualenvs/tap-mysql/bin/activate
+            pip3 install --upgrade pip
+            pip3 install .[test]
       - run:
-          name: 'Setup virtual env'
+          name: 'Pylinting'
           command: |
-            virtualenv -p python3 ~/.virtualenvs/tap-mysql
-            source ~/.virtualenvs/tap-mysql/bin/activate
-            pip install .
-            pip install pylint
-            pylint tap_mysql -d C,W,unexpected-keyword-arg,duplicate-code
+            . ./virtualenvs/tap-mysql/bin/activate
+            pylint --rcfile .pylintrc tap_mysql/
       - run:
-          name: 'Unit Tests'
+          name: 'Tests'
           command: |
-            source ~/.virtualenvs/tap-mysql/bin/activate
-            pip install nose
-            source dev_env.sh
-            nosetests
-      - add_ssh_keys
-      - run:
-          name: 'Integration Tests'
-          command: |
-            source ~/.virtualenvs/tap-tester/bin/activate
-            source dev_env.sh
-            run-a-test --tap=tap-mysql \
-                       --target=target-stitch \
-                       --orchestrator=stitch-orchestrator \
-                       --email=harrison+sandboxtest@stitchdata.com \
-                       --password=$SANDBOX_PASSWORD \
-                       --client-id=50 \
-                       tap_tester.suites.mysql
+            . ./virtualenvs/tap-mysql/bin/activate
+            nosetests -c .noserc tests
+
+workflows:
+  version: 2
+  build:
+    jobs:
+      - build

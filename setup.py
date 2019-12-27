@@ -3,7 +3,7 @@
 from setuptools import setup
 
 setup(name='pipelinewise-tap-mysql',
-      version='1.0.7',
+      version='1.1.0',
       description='Singer.io tap for extracting data from MySQL - PipelineWise compatible',
       author='Stitch',
       url='https://github.com/transferwise/pipelinewise-tap-mysql',
@@ -20,6 +20,13 @@ setup(name='pipelinewise-tap-mysql',
           'backoff==1.3.2',
           'mysql-replication==0.21',
       ],
+      extras_require={
+          'test': [
+              'nose==1.3.*',
+              'pylint==2.4.*',
+              'nose-cov==1.6'
+          ]
+      },
       entry_points='''
           [console_scripts]
           tap-mysql=tap_mysql:main

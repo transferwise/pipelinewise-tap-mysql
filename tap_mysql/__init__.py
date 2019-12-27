@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-# pylint: disable=missing-docstring,not-an-iterable,too-many-locals,too-many-arguments,too-many-branches,invalid-name,duplicate-code,too-many-statements
+# pylint: disable=missing-docstring,too-many-locals
 
-import datetime
 import collections
 import itertools
-from itertools import dropwhile
 import copy
 
 import pendulum
@@ -15,7 +13,6 @@ import singer
 import singer.metrics as metrics
 import singer.schema
 
-from singer import bookmarks
 from singer import metadata
 from singer import utils
 from singer.schema import Schema
@@ -27,7 +24,6 @@ import tap_mysql.sync_strategies.full_table as full_table
 import tap_mysql.sync_strategies.incremental as incremental
 
 from tap_mysql.connection import connect_with_backoff, MySQLConnection
-
 
 Column = collections.namedtuple('Column', [
     "table_schema",
@@ -51,15 +47,7 @@ LOGGER = singer.get_logger()
 
 pymysql.converters.conversions[pendulum.Pendulum] = pymysql.converters.escape_datetime
 
-
-STRING_TYPES = set([
-    'char',
-    'enum',
-    'longtext',
-    'mediumtext',
-    'text',
-    'varchar'
-])
+STRING_TYPES = {'char', 'enum', 'longtext', 'mediumtext', 'text', 'varchar'}
 
 BYTES_FOR_INTEGER_TYPE = {
     'tinyint': 1,
@@ -69,19 +57,21 @@ BYTES_FOR_INTEGER_TYPE = {
     'bigint': 8
 }
 
-FLOAT_TYPES = set(['float', 'double'])
+FLOAT_TYPES = {'float', 'double'}
 
-DATETIME_TYPES = set(['datetime', 'timestamp', 'date', 'time'])
+DATETIME_TYPES = {'datetime', 'timestamp', 'date', 'time'}
+
+BINARY_TYPES = {'binary', 'varbinary'}
 
 
-def schema_for_column(c):
-    '''Returns the Schema object for the given Column.'''
-    data_type = c.data_type.lower()
-    column_type = c.column_type.lower()
+def schema_for_column(column):
+    """Returns the Schema object for the given Column."""
+    data_type = column.data_type.lower()
+    column_type = column.column_type.lower()
 
     inclusion = 'available'
     # We want to automatically include all primary key columns
-    if c.column_key.lower() == 'pri':
+    if column.column_key.lower() == 'pri':
         inclusion = 'automatic'
 
     result = Schema(inclusion=inclusion)
@@ -92,7 +82,7 @@ def schema_for_column(c):
     elif data_type in BYTES_FOR_INTEGER_TYPE:
         result.type = ['null', 'integer']
         bits = BYTES_FOR_INTEGER_TYPE[data_type] * 8
-        if 'unsigned' in c.column_type:
+        if 'unsigned' in column.column_type:
             result.minimum = 0
             result.maximum = 2 ** bits - 1
         else:
@@ -104,53 +94,54 @@ def schema_for_column(c):
 
     elif data_type == 'decimal':
         result.type = ['null', 'number']
-        result.multipleOf = 10 ** (0 - c.numeric_scale)
+        result.multipleOf = 10 ** (0 - column.numeric_scale)
         return result
 
     elif data_type in STRING_TYPES:
         result.type = ['null', 'string']
-        result.maxLength = c.character_maximum_length
+        result.maxLength = column.character_maximum_length
 
     elif data_type in DATETIME_TYPES:
         result.type = ['null', 'string']
         result.format = 'date-time'
 
+    elif data_type in BINARY_TYPES:
+        result.type = ['null', 'string']
+        result.format = 'binary'
+
     else:
         result = Schema(None,
                         inclusion='unsupported',
-                        description='Unsupported column type {}'.format(column_type))
+                        description=f'Unsupported column type {column_type}')
     return result
 
 
 def create_column_metadata(cols):
     mdata = {}
     mdata = metadata.write(mdata, (), 'selected-by-default', False)
-    for c in cols:
-        schema = schema_for_column(c)
+    for col in cols:
+        schema = schema_for_column(col)
         mdata = metadata.write(mdata,
-                               ('properties', c.column_name),
+                               ('properties', col.column_name),
                                'selected-by-default',
                                schema.inclusion != 'unsupported')
         mdata = metadata.write(mdata,
-                               ('properties', c.column_name),
+                               ('properties', col.column_name),
                                'sql-datatype',
-                               c.column_type.lower())
+                               col.column_type.lower())
 
     return metadata.to_list(mdata)
 
 
 def discover_catalog(mysql_conn, config):
-    '''Returns a Catalog describing the structure of the database.'''
-
+    """Returns a Catalog describing the structure of the database."""
 
     filter_dbs_config = config.get('filter_dbs')
 
-
     if filter_dbs_config:
-        filter_dbs_clause = ",".join(["'{}'".format(db)
-                                         for db in filter_dbs_config.split(",")])
+        filter_dbs_clause = ",".join([f"'{db_name}'" for db_name in filter_dbs_config.split(",")])
 
-        table_schema_clause = "WHERE table_schema IN ({})".format(filter_dbs_clause)
+        table_schema_clause = f"WHERE table_schema IN ({filter_dbs_clause})"
     else:
         table_schema_clause = """
         WHERE table_schema NOT IN (
@@ -162,27 +153,27 @@ def discover_catalog(mysql_conn, config):
 
     with connect_with_backoff(mysql_conn) as open_conn:
         with open_conn.cursor() as cur:
-            cur.execute("""
+            cur.execute(f"""
             SELECT table_schema,
                    table_name,
                    table_type,
                    table_rows
                 FROM information_schema.tables
-                {}
-            """.format(table_schema_clause))
+                {table_schema_clause}
+            """)
 
             table_info = {}
 
-            for (db, table, table_type, rows) in cur.fetchall():
-                if db not in table_info:
-                    table_info[db] = {}
+            for (db_name, table, table_type, rows) in cur.fetchall():
+                if db_name not in table_info:
+                    table_info[db_name] = {}
 
-                table_info[db][table] = {
+                table_info[db_name][table] = {
                     'row_count': rows,
                     'is_view': table_type == 'VIEW'
                 }
 
-            cur.execute("""
+            cur.execute(f"""
                 SELECT table_schema,
                        table_name,
                        column_name,
@@ -193,9 +184,9 @@ def discover_catalog(mysql_conn, config):
                        column_type,
                        column_key
                     FROM information_schema.columns
-                    {}
+                    {table_schema_clause}
                     ORDER BY table_schema, table_name
-            """.format(table_schema_clause))
+            """)
 
             columns = []
             rec = cur.fetchone()
@@ -209,8 +200,8 @@ def discover_catalog(mysql_conn, config):
                 (table_schema, table_name) = k
                 schema = Schema(type='object',
                                 properties={c.column_name: schema_for_column(c) for c in cols})
-                md = create_column_metadata(cols)
-                md_map = metadata.to_map(md)
+                mdata = create_column_metadata(cols)
+                md_map = metadata.to_map(mdata)
 
                 md_map = metadata.write(md_map,
                                         (),
@@ -233,10 +224,8 @@ def discover_catalog(mysql_conn, config):
                                             'is-view',
                                             is_view)
 
-                column_is_key_prop = lambda c, s: (
-                    c.column_key == 'PRI' and
-                    s.properties[c.column_name].inclusion != 'unsupported'
-                )
+                column_is_key_prop = lambda c, s: (c.column_key == 'PRI' and
+                                                   s.properties[c.column_name].inclusion != 'unsupported')
 
                 key_properties = [c.column_name for c in cols if column_is_key_prop(c, schema)]
 
@@ -262,9 +251,7 @@ def do_discover(mysql_conn, config):
     discover_catalog(mysql_conn, config).dump()
 
 
-# TODO: Maybe put in a singer-db-utils library.
 def desired_columns(selected, table_schema):
-
     '''Return the set of column names we need to include in the SELECT.
 
     selected - set of column names marked as selected in the input catalog
@@ -344,6 +331,7 @@ def is_valid_currently_syncing_stream(selected_stream, state):
         return True
 
     return False
+
 
 def binlog_stream_requires_historical(catalog_entry, state):
     log_file = singer.get_bookmark(state,
@@ -429,7 +417,7 @@ def get_non_binlog_streams(mysql_conn, catalog, config, state):
     discovered = discover_catalog(mysql_conn, config)
 
     # Filter catalog to include only selected streams
-    selected_streams = list(filter(lambda s: common.stream_is_selected(s), catalog.streams))
+    selected_streams = list(filter(common.stream_is_selected, catalog.streams))
     streams_with_state = []
     streams_without_state = []
 
@@ -447,7 +435,8 @@ def get_non_binlog_streams(mysql_conn, catalog, config, state):
             is_view = common.get_is_view(stream)
 
             if is_view:
-                raise Exception("Unable to replicate stream({}) with binlog because it is a view.".format(stream.stream))
+                raise Exception(
+                    f"Unable to replicate stream({stream.stream}) with binlog because it is a view.")
 
             LOGGER.info("LOG_BASED stream %s will resume its historical sync", stream.tap_stream_id)
 
@@ -481,13 +470,12 @@ def get_non_binlog_streams(mysql_conn, catalog, config, state):
 def get_binlog_streams(mysql_conn, catalog, config, state):
     discovered = discover_catalog(mysql_conn, config)
 
-    selected_streams = list(filter(lambda s: common.stream_is_selected(s), catalog.streams))
+    selected_streams = list(filter(common.stream_is_selected, catalog.streams))
     binlog_streams = []
 
     for stream in selected_streams:
         stream_metadata = metadata.to_map(stream.metadata)
         replication_method = stream_metadata.get((), {}).get('replication-method')
-        stream_state = state.get('bookmarks', {}).get(stream.tap_stream_id)
 
         if replication_method == 'LOG_BASED' and not binlog_stream_requires_historical(stream, state):
             binlog_streams.append(stream)
@@ -495,7 +483,10 @@ def get_binlog_streams(mysql_conn, catalog, config, state):
     return resolve_catalog(discovered, binlog_streams)
 
 
-def write_schema_message(catalog_entry, bookmark_properties=[]):
+def write_schema_message(catalog_entry, bookmark_properties=None):
+    if bookmark_properties is None:
+        bookmark_properties = []
+
     key_properties = common.get_key_properties(catalog_entry)
 
     singer.write_message(singer.SchemaMessage(
@@ -513,7 +504,8 @@ def do_sync_incremental(mysql_conn, catalog_entry, state, columns):
     replication_key = md_map.get((), {}).get('replication-key')
 
     if not replication_key:
-        raise Exception("Cannot use INCREMENTAL replication for table ({}) without a replication key.".format(catalog_entry.stream))
+        raise Exception(
+            f"Cannot use INCREMENTAL replication for table ({catalog_entry.stream}) without a replication key.")
 
     write_schema_message(catalog_entry=catalog_entry,
                          bookmark_properties=[replication_key])
@@ -527,10 +519,9 @@ def do_sync_historical_binlog(mysql_conn, config, catalog_entry, state, columns)
     binlog.verify_binlog_config(mysql_conn)
 
     is_view = common.get_is_view(catalog_entry)
-    key_properties = common.get_key_properties(catalog_entry)
 
     if is_view:
-        raise Exception("Unable to replicate stream({}) with binlog because it is a view.".format(catalog_entry.stream))
+        raise Exception(f"Unable to replicate stream({catalog_entry.stream}) with binlog because it is a view.")
 
     log_file = singer.get_bookmark(state,
                                    catalog_entry.tap_stream_id,
@@ -543,10 +534,6 @@ def do_sync_historical_binlog(mysql_conn, config, catalog_entry, state, columns)
     max_pk_values = singer.get_bookmark(state,
                                         catalog_entry.tap_stream_id,
                                         'max_pk_values')
-
-    last_pk_fetched = singer.get_bookmark(state,
-                                          catalog_entry.tap_stream_id,
-                                          'last_pk_fetched')
 
     write_schema_message(catalog_entry)
 
@@ -600,7 +587,6 @@ def do_sync_historical_binlog(mysql_conn, config, catalog_entry, state, columns)
 
 def do_sync_full_table(mysql_conn, catalog_entry, state, columns):
     LOGGER.info("Stream %s is using full table replication", catalog_entry.stream)
-    key_properties = common.get_key_properties(catalog_entry)
 
     write_schema_message(catalog_entry)
 
@@ -662,7 +648,7 @@ def sync_binlog_streams(mysql_conn, binlog_catalog, config, state):
         for stream in binlog_catalog.streams:
             write_schema_message(stream)
 
-        with metrics.job_timer('sync_binlog') as timer:
+        with metrics.job_timer('sync_binlog'):
             binlog.sync_binlog_stream(mysql_conn, config, binlog_catalog.streams, state)
 
 
@@ -672,6 +658,7 @@ def do_sync(mysql_conn, config, catalog, state):
 
     sync_non_binlog_streams(mysql_conn, non_binlog_catalog, config, state)
     sync_binlog_streams(mysql_conn, binlog_catalog, config, state)
+
 
 def log_server_params(mysql_conn):
     with connect_with_backoff(mysql_conn) as open_conn:
@@ -695,15 +682,12 @@ def log_server_params(mysql_conn):
                 cur.execute('''
                 show session status where Variable_name IN ('Ssl_version', 'Ssl_cipher')''')
                 rows = cur.fetchall()
-                mapped_row = {k:v for (k,v) in [(r[0], r[1]) for r in rows]}
-                LOGGER.info('Server SSL Parameters (blank means SSL is not active): ' +
-                            '[ssl_version: %s], ' +
-                            '[ssl_cipher: %s]',
-                            mapped_row['Ssl_version'],
-                            mapped_row['Ssl_cipher'])
+                mapped_row = {r[0]: r[1] for r in rows}
+                LOGGER.info('Server SSL Parameters(blank means SSL is not active): [ssl_version: %s], [ssl_cipher: %s]',
+                            mapped_row['Ssl_version'], mapped_row['Ssl_cipher'])
 
-        except pymysql.err.InternalError as e:
-            LOGGER.warning("Encountered error checking server params. Error: (%s) %s", *e.args)
+        except pymysql.err.InternalError as exc:
+            LOGGER.warning("Encountered error checking server params. Error: (%s) %s", *exc.args)
 
 
 def main_impl():
