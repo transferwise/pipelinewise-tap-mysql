@@ -100,8 +100,22 @@ def row_to_singer_record(catalog_entry, version, row, columns, time_extracted):
             row_to_persist += (timedelta_from_epoch.isoformat() + '+00:00',)
 
         elif isinstance(elem, bytes):
-            # encode bytes as hex
-            row_to_persist += (codecs.encode(elem, 'hex'),)
+            # Removes all trailing '\x00' from the bytes
+            # Trailing zeroes in bytes is caused by how BINARY type columns pads the inserted values,
+            # this doesn't happen when using VARBINARY.
+            #
+            # ref: https://dev.mysql.com/doc/refman/8.0/en/binary-varbinary.html
+            #
+            # Leaving the trailing zeroes makes FT & Incremental behave differently than Binlog and we end up with
+            # inconsistent state records.
+            #
+            # Example: for a binary value b'pk0'
+            #   - Binlog would read it as b'pk0' then in HEX it would be b'706b30'
+            #   - FT & Inc would read it as b'pk0\x00\x00\x00\x00....\x00' then in HEX it would be b'706b300000...0'
+            stripped_utf8_elem = elem.decode().rstrip('\x00').encode()
+
+            # encode the stripped elem to hex
+            row_to_persist += (codecs.encode(stripped_utf8_elem, 'hex'),)
 
         elif 'boolean' in property_type or property_type == 'boolean':
             if elem is None:
