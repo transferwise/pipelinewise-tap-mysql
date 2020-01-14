@@ -7,13 +7,13 @@ from tap_mysql.connection import MySQLConnection
 
 DB_NAME='tap_mysql_test'
 
+
 def get_db_config():
-    config = {}
-    config['host'] = os.environ['TAP_MYSQL_HOST']
-    config['port'] = int(os.environ['TAP_MYSQL_PORT'])
-    config['user'] = os.environ['TAP_MYSQL_USER']
-    config['password'] = os.environ['TAP_MYSQL_PASSWORD']
-    config['charset'] = 'utf8'
+    config = {'host': os.environ['TAP_MYSQL_HOST'],
+              'port': int(os.environ['TAP_MYSQL_PORT']),
+              'user': os.environ['TAP_MYSQL_USER'],
+              'password': os.environ['TAP_MYSQL_PASSWORD'],
+              'charset': 'utf8'}
     if not config['password']:
         del config['password']
 
@@ -67,6 +67,15 @@ def set_replication_method_and_key(stream, r_method, r_key):
 
     if r_key:
         old_md.update({'replication-key': r_key})
+
+    stream.metadata = singer.metadata.to_list(new_md)
+    return stream
+
+
+def set_selected(stream, selected=False):
+    new_md = singer.metadata.to_map(stream.metadata)
+    old_md = new_md.get(())
+    old_md.update({'selected': selected})
 
     stream.metadata = singer.metadata.to_list(new_md)
     return stream

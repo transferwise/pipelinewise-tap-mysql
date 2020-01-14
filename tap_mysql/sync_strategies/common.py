@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # pylint: disable=missing-function-docstring,too-many-arguments,too-many-locals
-import codecs
 import copy
 import datetime
 import singer
@@ -20,6 +19,7 @@ def escape(string):
 
 def generate_tap_stream_id(table_schema, table_name):
     return table_schema + '-' + table_name
+
 
 def get_stream_version(tap_stream_id, state):
     stream_version = singer.get_bookmark(state, tap_stream_id, 'version')
@@ -75,7 +75,21 @@ def generate_select_sql(catalog_entry, columns):
     database_name = get_database_name(catalog_entry)
     escaped_db = escape(database_name)
     escaped_table = escape(catalog_entry.table)
-    escaped_columns = [escape(c) for c in columns]
+    escaped_columns = []
+
+    for idx, col_name in enumerate(columns):
+        # wrap the column name in "`"
+        escaped_col = escape(col_name)
+
+        # fetch the column type format from the json schema already built
+        property_format = catalog_entry.schema.properties[col_name].format
+
+        # if the column format is binary, fetch the values after removing any trailing
+        # null bytes 0x00 and hexifying the column.
+        if 'binary' == property_format:
+            escaped_columns.append(f'hex(trim(trailing CHAR(0x00) from {escaped_col})) as {escaped_col}')
+        else:
+            escaped_columns.append(escaped_col)
 
     select_sql = f'SELECT {",".join(escaped_columns)} FROM {escaped_db}.{escaped_table}'
 
@@ -98,24 +112,6 @@ def row_to_singer_record(catalog_entry, version, row, columns, time_extracted):
             epoch = datetime.datetime.utcfromtimestamp(0)
             timedelta_from_epoch = epoch + elem
             row_to_persist += (timedelta_from_epoch.isoformat() + '+00:00',)
-
-        elif isinstance(elem, bytes):
-            # Removes all trailing '\x00' from the bytes
-            # Trailing zeroes in bytes is caused by how BINARY type columns pads the inserted values,
-            # this doesn't happen when using VARBINARY.
-            #
-            # ref: https://dev.mysql.com/doc/refman/8.0/en/binary-varbinary.html
-            #
-            # Leaving the trailing zeroes makes FT & Incremental behave differently than Binlog and we end up with
-            # inconsistent state records.
-            #
-            # Example: for a binary value b'pk0'
-            #   - Binlog would read it as b'pk0' then in HEX it would be b'706b30'
-            #   - FT & Inc would read it as b'pk0\x00\x00\x00\x00....\x00' then in HEX it would be b'706b300000...0'
-            stripped_utf8_elem = elem.decode().rstrip('\x00').encode()
-
-            # encode the stripped elem to hex
-            row_to_persist += (codecs.encode(stripped_utf8_elem, 'hex'),)
 
         elif 'boolean' in property_type or property_type == 'boolean':
             if elem is None:
