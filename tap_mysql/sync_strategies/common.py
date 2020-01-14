@@ -82,7 +82,7 @@ def generate_select_sql(catalog_entry, columns):
         escaped_col = escape(col_name)
 
         # fetch the column type format from the json schema already built
-        property_format = catalog_entry.schema.properties[columns[idx]].format
+        property_format = catalog_entry.schema.properties[col_name].format
 
         # if the column format is binary, fetch the values after removing any trailing
         # null bytes 0x00 and hexifying the column.
