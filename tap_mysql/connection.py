@@ -33,7 +33,7 @@ def connect_with_backoff(connection):
             warnings.append(f'Could not set session.time_zone. Error: ({exc.args[0]}) {exc.args[1]}')
 
         try:
-            cur.execute('SET @@session.wait_timeout=2700')
+            cur.execute('SET @@session.wait_timeout=28800')
         except pymysql.err.InternalError as exc:
             warnings.append(f'Could not set session.wait_timeout. Error: ({exc.args[0]}) {exc.args[1]}')
 
@@ -43,7 +43,7 @@ def connect_with_backoff(connection):
             warnings.append(f'Could not set session.net_read_timeout. Error: ({exc.args[0]}) {exc.args[1]}')
 
         try:
-            cur.execute('SET @@session.innodb_lock_wait_timeout=2700')
+            cur.execute('SET @@session.innodb_lock_wait_timeout=3600')
         except pymysql.err.InternalError as exc:
             warnings.append(
                 f'Could not set session.innodb_lock_wait_timeout. Error: ({exc.args[0]}) {exc.args[1]}'
