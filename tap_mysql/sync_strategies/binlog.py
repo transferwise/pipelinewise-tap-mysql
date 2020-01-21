@@ -328,6 +328,8 @@ def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state):
     events_skipped = 0
 
     current_log_file, current_log_pos = fetch_current_log_file_and_pos(mysql_conn)
+    log_file = None
+    log_pos = None
 
     for binlog_event in reader:
         if isinstance(binlog_event, RotateEvent):
@@ -378,19 +380,30 @@ def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state):
                                 binlog_event.schema,
                                 binlog_event.table)
 
+        # Update log_file and log_pos after every processed binlog event
+        log_file = reader.log_file
+        log_pos = reader.log_pos
+
         # The iterator across python-mysql-replication's fetchone method should ultimately terminate
         # upon receiving an EOF packet. There seem to be some cases when a MySQL server will not send
         # one causing binlog replication to hang.
-        if current_log_file == reader.log_file and reader.log_pos >= current_log_pos:
+        if current_log_file == log_file and log_pos >= current_log_pos:
             break
 
+        # Update singer bookmark and send STATE message periodically
         if ((rows_saved and rows_saved % UPDATE_BOOKMARK_PERIOD == 0) or
                 (events_skipped and events_skipped % UPDATE_BOOKMARK_PERIOD == 0)):
             state = update_bookmarks(state,
                                      binlog_streams_map,
-                                     reader.log_file,
-                                     reader.log_pos)
+                                     log_file,
+                                     log_pos)
             singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
+
+    # Update singer bookmark at the last time to point it the the last processed binlog event
+    state = update_bookmarks(state,
+                             binlog_streams_map,
+                             log_file,
+                             log_pos)
 
 
 def sync_binlog_stream(mysql_conn, config, binlog_streams, state):
