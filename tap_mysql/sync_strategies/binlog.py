@@ -400,10 +400,11 @@ def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state):
             singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
     # Update singer bookmark at the last time to point it the the last processed binlog event
-    state = update_bookmarks(state,
-                             binlog_streams_map,
-                             log_file,
-                             log_pos)
+    if log_file and log_pos:
+        state = update_bookmarks(state,
+                                 binlog_streams_map,
+                                 log_file,
+                                 log_pos)
 
 
 def sync_binlog_stream(mysql_conn, config, binlog_streams, state):
