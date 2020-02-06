@@ -15,10 +15,10 @@ setup(name='pipelinewise-tap-mysql',
       install_requires=[
           'attrs==16.3.0',
           'pendulum==1.2.0',
-          'singer-python==5.3.1',
+          'pipelinewise-singer-python @ git+https://github.com/transferwise/pipelinewise-singer-python.git#egg=pipelinewise-singer-python',
           'PyMySQL==0.7.11',
-          'backoff==1.3.2',
           'mysql-replication==0.21',
+          'pyyaml==5.3',
       ],
       extras_require={
           'test': [
@@ -32,4 +32,4 @@ setup(name='pipelinewise-tap-mysql',
           tap-mysql=tap_mysql:main
       ''',
       packages=['tap_mysql', 'tap_mysql.sync_strategies'],
-)
+      )

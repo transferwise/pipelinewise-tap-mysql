@@ -5,11 +5,10 @@ import datetime
 import singer
 import time
 
-import singer.metrics as metrics
-from singer import metadata
-from singer import utils
+from singer import metadata, utils, metrics
 
-LOGGER = singer.get_logger()
+LOGGER = singer.get_logger('tap_mysql')
+
 
 def escape(string):
     if '`' in string:

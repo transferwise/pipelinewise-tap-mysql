@@ -4,18 +4,12 @@
 import collections
 import itertools
 import copy
-
 import pendulum
-
 import pymysql
-
 import singer
 import singer.metrics as metrics
-import singer.schema
 
-from singer import metadata
-from singer import utils
-from singer.schema import Schema
+from singer import metadata, Schema, get_logger
 from singer.catalog import Catalog, CatalogEntry
 
 import tap_mysql.sync_strategies.binlog as binlog
@@ -24,6 +18,8 @@ import tap_mysql.sync_strategies.full_table as full_table
 import tap_mysql.sync_strategies.incremental as incremental
 
 from tap_mysql.connection import connect_with_backoff, MySQLConnection
+
+LOGGER = get_logger('tap_mysql')
 
 Column = collections.namedtuple('Column', [
     "table_schema",
@@ -42,8 +38,6 @@ REQUIRED_CONFIG_KEYS = [
     'user',
     'password'
 ]
-
-LOGGER = singer.get_logger()
 
 pymysql.converters.conversions[pendulum.Pendulum] = pymysql.converters.escape_datetime
 
@@ -683,15 +677,16 @@ def log_server_params(mysql_conn):
                 show session status where Variable_name IN ('Ssl_version', 'Ssl_cipher')''')
                 rows = cur.fetchall()
                 mapped_row = {r[0]: r[1] for r in rows}
-                LOGGER.info('Server SSL Parameters(blank means SSL is not active): [ssl_version: %s], [ssl_cipher: %s]',
-                            mapped_row['Ssl_version'], mapped_row['Ssl_cipher'])
+                LOGGER.info(
+                    'Server SSL Parameters(blank means SSL is not active): [ssl_version: %s], [ssl_cipher: %s]',
+                    mapped_row['Ssl_version'], mapped_row['Ssl_cipher'])
 
         except pymysql.err.InternalError as exc:
             LOGGER.warning("Encountered error checking server params. Error: (%s) %s", *exc.args)
 
 
 def main_impl():
-    args = utils.parse_args(REQUIRED_CONFIG_KEYS)
+    args = singer.utils.parse_args(REQUIRED_CONFIG_KEYS)
 
     mysql_conn = MySQLConnection(args.config)
     log_server_params(mysql_conn)

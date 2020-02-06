@@ -10,8 +10,6 @@ try:
 except ImportError:
     import utils as test_utils
 
-LOGGER = singer.get_logger()
-
 SINGER_MESSAGES = []
 TABLE_2_RECORD_COUNT = 0
 
@@ -157,7 +155,6 @@ class BinlogInterruption(unittest.TestCase):
         failed_syncing_table_2 = False
         singer.write_message = singer_write_message_ok
 
-        table_2_RECORD_COUNT = 0
         SINGER_MESSAGES.clear()
 
         tap_mysql.do_sync(self.conn, test_utils.get_db_config(), self.catalog, state)

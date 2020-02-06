@@ -3,12 +3,12 @@
 import codecs
 import copy
 import datetime
-
 import pymysql.connections
 import pymysql.err
 import pytz
 import singer
 import tzlocal
+
 from pymysqlreplication import BinLogStreamReader
 from pymysqlreplication.constants import FIELD_TYPE
 from pymysqlreplication.event import RotateEvent
@@ -17,13 +17,12 @@ from pymysqlreplication.row_event import (
     UpdateRowsEvent,
     WriteRowsEvent,
 )
-from singer import utils
-from singer.schema import Schema
+from singer import utils, Schema
 
 import tap_mysql.sync_strategies.common as common
 from tap_mysql.connection import connect_with_backoff, make_connection_wrapper
 
-LOGGER = singer.get_logger()
+LOGGER = singer.get_logger('tap_mysql')
 
 SDC_DELETED_AT = "_sdc_deleted_at"
 
@@ -425,7 +424,7 @@ def sync_binlog_stream(mysql_conn, config, binlog_streams, state):
         LOGGER.info("No server_id provided, will use global server_id=%s", server_id)
 
     connection_wrapper = make_connection_wrapper(config)
-
+    reader = None
     try:
         reader = BinLogStreamReader(
             connection_settings={},

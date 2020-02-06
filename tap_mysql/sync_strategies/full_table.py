@@ -2,13 +2,15 @@
 # pylint: disable=too-many-locals,missing-function-docstring
 
 import singer
+
 from singer import metadata
 
 import tap_mysql.sync_strategies.binlog as binlog
 import tap_mysql.sync_strategies.common as common
+
 from tap_mysql.connection import connect_with_backoff
 
-LOGGER = singer.get_logger()
+LOGGER = singer.get_logger('tap_mysql')
 
 
 def generate_bookmark_keys(catalog_entry):
