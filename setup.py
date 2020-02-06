@@ -15,7 +15,7 @@ setup(name='pipelinewise-tap-mysql',
       install_requires=[
           'attrs==16.3.0',
           'pendulum==1.2.0',
-          'pipelinewise-singer-python @ git+https://github.com/transferwise/pipelinewise-singer-python.git#egg=pipelinewise-singer-python',
+          'pipelinewise-singer-python==1.*',
           'PyMySQL==0.7.11',
           'mysql-replication==0.21',
           'pyyaml==5.3',
