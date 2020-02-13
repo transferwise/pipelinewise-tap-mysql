@@ -2,6 +2,7 @@ version: '3.1'
 
 services:
   test_mysql:
+    container_name: "pipelinewise-tap-mysql-db"
     image: mariadb:10.2.26
     environment:
       MYSQL_ROOT_PASSWORD: my-secret-passwd

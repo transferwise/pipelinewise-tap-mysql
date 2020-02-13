@@ -2,14 +2,13 @@
 # pylint: disable=missing-docstring,arguments-differ,missing-function-docstring
 
 import backoff
-
 import pymysql
+import ssl
+import singer
+
 from pymysql.constants import CLIENT
 
-import singer
-import ssl
-
-LOGGER = singer.get_logger()
+LOGGER = singer.get_logger('tap_mysql')
 
 CONNECT_TIMEOUT_SECONDS = 30
 READ_TIMEOUT_SECONDS = 3600

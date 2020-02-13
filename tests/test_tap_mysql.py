@@ -16,8 +16,6 @@ import tap_mysql.sync_strategies.common as common
 
 from singer.schema import Schema
 
-LOGGER = singer.get_logger()
-
 SINGER_MESSAGES = []
 
 
@@ -566,8 +564,6 @@ class TestIncrementalReplication(unittest.TestCase):
 
         tap_mysql.do_sync(self.conn, {}, self.catalog, state)
 
-        print(state)
-
         self.assertEqual(state['bookmarks']['tap_mysql_test-incremental']['replication_key'], 'val')
         self.assertEqual(state['bookmarks']['tap_mysql_test-incremental']['replication_key_value'], 3)
         self.assertEqual(state['bookmarks']['tap_mysql_test-incremental']['version'], 1)
@@ -706,15 +702,10 @@ class TestBinlogReplication(unittest.TestCase):
         expected_exception_message = "Unable to replicate stream(tap_mysql_test-{}) with binlog because it is a view.".format(
             self.catalog.streams[0].stream)
 
-        try:
+        with self.assertRaises(Exception) as context:
             tap_mysql.do_sync(self.conn, {}, self.catalog, state)
-        except Exception as e:
-            failed = True
-            exception_message = str(e)
-            LOGGER.error(exception_message)
 
-        self.assertTrue(failed)
-        self.assertEqual(expected_exception_message, exception_message)
+            self.assertEqual(expected_exception_message, str(context.exception))
 
     def test_fail_if_log_file_does_not_exist(self):
         log_file = 'chicken'
@@ -729,18 +720,15 @@ class TestBinlogReplication(unittest.TestCase):
             }
         }
 
-        failed = False
-        exception_message = None
         expected_exception_message = "Unable to replicate stream({}) with binlog because log file {} does not exist.".format(
             stream,
             log_file
         )
 
-        try:
+        with self.assertRaises(Exception) as context:
             tap_mysql.do_sync(self.conn, {}, self.catalog, state)
-        except Exception as e:
-            exception_message = str(e)
-            LOGGER.error(exception_message)
+
+            self.assertEqual(expected_exception_message, str(context.exception))
 
     def test_binlog_stream(self):
         global SINGER_MESSAGES

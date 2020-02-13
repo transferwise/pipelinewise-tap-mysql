@@ -8,9 +8,9 @@ from singer import metadata
 from tap_mysql.connection import connect_with_backoff
 import tap_mysql.sync_strategies.common as common
 
-LOGGER = singer.get_logger()
 
 BOOKMARK_KEYS = {'replication_key', 'replication_key_value', 'version'}
+
 
 def sync_table(mysql_conn, catalog_entry, state, columns):
     common.whitelist_bookmark_keys(BOOKMARK_KEYS, catalog_entry.tap_stream_id, state)

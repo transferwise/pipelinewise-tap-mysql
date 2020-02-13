@@ -33,7 +33,7 @@ jobs:
             python3 -m venv ./virtualenvs/tap-mysql
             . ./virtualenvs/tap-mysql/bin/activate
             pip3 install --upgrade pip
-            pip3 install .[test]
+            pip3 install -e .[test]
       - run:
           name: 'Pylinting'
           command: |
@@ -43,6 +43,7 @@ jobs:
           name: 'Tests'
           command: |
             . ./virtualenvs/tap-mysql/bin/activate
+            export LOGGING_CONF_FILE=./sample_logging.conf
             nosetests -c .noserc tests
 
 workflows:
