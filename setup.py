@@ -2,10 +2,15 @@
 
 from setuptools import setup
 
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+
 setup(name='pipelinewise-tap-mysql',
-      version='1.1.5',
+      version='1.2.0',
       description='Singer.io tap for extracting data from MySQL - PipelineWise compatible',
-      author='Stitch',
+      long_description=long_description,
+      long_description_content_type='text/markdown',
+      author='TransferWise',
       url='https://github.com/transferwise/pipelinewise-tap-mysql',
       classifiers=[
           'License :: OSI Approved :: GNU Affero General Public License v3',
