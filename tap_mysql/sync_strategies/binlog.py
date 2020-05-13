@@ -3,6 +3,7 @@
 import codecs
 import copy
 import datetime
+import json
 import pymysql.connections
 import pymysql.err
 import pytz
@@ -114,6 +115,14 @@ def fetch_server_id(mysql_conn):
             return server_id
 
 
+def json_bytes_to_string(data):
+    if isinstance(data, bytes):  return data.decode()
+    if isinstance(data, dict):   return dict(map(json_bytes_to_string, data.items()))
+    if isinstance(data, tuple):  return tuple(map(json_bytes_to_string, data))
+    if isinstance(data, list):   return list(map(json_bytes_to_string, data))
+    return data
+
+
 def row_to_singer_record(catalog_entry, version, db_column_map, row, time_extracted):
     row_to_persist = {}
 
@@ -140,6 +149,9 @@ def row_to_singer_record(catalog_entry, version, db_column_map, row, time_extrac
         elif isinstance(val, datetime.timedelta):
             timedelta_from_epoch = datetime.datetime.utcfromtimestamp(0) + val
             row_to_persist[column_name] = timedelta_from_epoch.isoformat() + '+00:00'
+
+        elif db_column_type == FIELD_TYPE.JSON:
+            row_to_persist[column_name] = json.dumps(json_bytes_to_string(val))
 
         elif isinstance(val, bytes):
             # encode bytes as hex bytes then to utf8 string
