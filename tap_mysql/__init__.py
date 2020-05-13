@@ -87,7 +87,7 @@ def schema_for_column(column):
         result.type = ['null', 'number']
 
     elif data_type == 'json':
-        result.type = ['null', 'string']
+        result.type = ['null', 'object']
 
     elif data_type == 'decimal':
         result.type = ['null', 'number']
