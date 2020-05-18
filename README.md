@@ -77,6 +77,8 @@ client (`mysql`).
 
 ### Optional config parameters
 
+`filter_db`: Comma separated list of schemas to extract tables only from particular schemas and to improve data extraction performance
+
 `session_sqls`: List of SQL commands to run when a connection made. This allows to set session variables dynamically, like timeouts. If not set then the following commands will be executed:
 ```
 SET @@session.time_zone="+0:00"
