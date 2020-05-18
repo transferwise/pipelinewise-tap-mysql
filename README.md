@@ -75,6 +75,16 @@ Create a config file containing the database connection credentials, e.g.:
 These are the same basic configuration properties used by the MySQL command-line
 client (`mysql`).
 
+### Optional config parameters
+
+`session_sqls`: List of SQL commands to run when a connection made. This allows to set session variables dynamically, like timeouts. If not set then the following commands will be executed:
+```
+SET @@session.time_zone="+0:00"
+SET @@session.wait_timeout=28800
+SET @@session.net_read_timeout=3600
+SET @@session.innodb_lock_wait_timeout=3600
+```
+
 ### Discovery mode
 
 The tap can be invoked in discovery mode to find the available tables and
