@@ -1,10 +1,12 @@
 import unittest
+from unittest.mock import patch
 
+import pymysql
 import singer
 import singer.metadata
 
 import tap_mysql
-from tap_mysql.connection import connect_with_backoff
+from tap_mysql.connection import connect_with_backoff, MySQLConnection
 
 try:
     import tests.utils as test_utils
@@ -980,6 +982,78 @@ class TestSupportedPK(unittest.TestCase):
         with connect_with_backoff(self.conn) as open_conn:
             with open_conn.cursor() as cursor:
                 cursor.execute('DROP TABLE good_pk_tab;')
+
+
+class MySQLConnectionMock(MySQLConnection):
+    """
+    Mocked MySQLConnection class
+    """
+    def __init__(self, config):
+        super().__init__(config)
+
+        self.executed_queries = []
+
+    def run_sql(self, sql):
+        self.executed_queries.append(sql)
+
+
+class TestSessionSqls(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.executed_queries = []
+
+    def run_sql_mock(self, connection, sql):
+        if sql.startswith('INVALID-SQL'):
+            raise pymysql.err.InternalError
+
+        self.executed_queries.append(sql)
+
+    def test_open_connections_with_default_session_sqls(self):
+        """Default session parameters should be applied if no custom session SQLs"""
+        with patch('tap_mysql.connection.MySQLConnection.connect'):
+            with patch('tap_mysql.connection.run_sql') as run_sql_mock:
+                run_sql_mock.side_effect = self.run_sql_mock
+                conn = MySQLConnectionMock(config=test_utils.get_db_config())
+                connect_with_backoff(conn)
+
+        # Test if session variables applied on connection
+        self.assertEqual(self.executed_queries, tap_mysql.connection.DEFAULT_SESSION_SQLS)
+
+    def test_open_connections_with_session_sqls(self):
+        """Custom session parameters should be applied if defined"""
+        session_sqls = [
+            'SET SESSION max_statement_time=0',
+            'SET SESSION wait_timeout=28800'
+        ]
+
+        with patch('tap_mysql.connection.MySQLConnection.connect'):
+            with patch('tap_mysql.connection.run_sql') as run_sql_mock:
+                run_sql_mock.side_effect = self.run_sql_mock
+                conn = MySQLConnectionMock(config={**test_utils.get_db_config(),
+                                                   **{'session_sqls': session_sqls}})
+                connect_with_backoff(conn)
+
+        # Test if session variables applied on connection
+        self.assertEqual(self.executed_queries, session_sqls)
+
+    def test_open_connections_with_invalid_session_sqls(self):
+        """Invalid SQLs in session_sqls should be ignored"""
+        session_sqls = [
+            'SET SESSION max_statement_time=0',
+            'INVALID-SQL-SHOULD-BE-SILENTLY-IGNORED',
+            'SET SESSION wait_timeout=28800'
+        ]
+
+        with patch('tap_mysql.connection.MySQLConnection.connect'):
+            with patch('tap_mysql.connection.run_sql') as run_sql_mock:
+                run_sql_mock.side_effect = self.run_sql_mock
+                conn = MySQLConnectionMock(config={**test_utils.get_db_config(),
+                                                   **{'session_sqls': session_sqls}})
+                connect_with_backoff(conn)
+
+        # Test if session variables applied on connection
+        self.assertEqual(self.executed_queries, ['SET SESSION max_statement_time=0',
+                                                 'SET SESSION wait_timeout=28800'])
 
 
 if __name__ == "__main__":
