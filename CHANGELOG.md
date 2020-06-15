@@ -2,7 +2,7 @@
 -------------------
 
 -  Fix dependency issue by removing `attrs` from `setup.py`
--  Bump `pymsql` to `0.9.3`
+-  Bump `pymysql` to `0.9.3`
 
 1.3.0 (2020-05-18)
 -------------------
