@@ -10,6 +10,7 @@ import pytz
 import singer
 import tzlocal
 
+from typing import Dict
 from pymysqlreplication import BinLogStreamReader
 from pymysqlreplication.constants import FIELD_TYPE
 from pymysqlreplication.event import RotateEvent
@@ -21,6 +22,8 @@ from pymysqlreplication.row_event import (
 from singer import utils, Schema
 
 import tap_mysql.sync_strategies.common as common
+from tap_mysql.stream_utils import write_schema_message
+from tap_mysql.discover_utils import discover_catalog
 from tap_mysql.connection import connect_with_backoff, make_connection_wrapper
 
 LOGGER = singer.get_logger('tap_mysql')
@@ -332,7 +335,7 @@ def generate_streams_map(binlog_streams):
     return stream_map
 
 
-def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state):
+def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config: Dict):
     time_extracted = utils.now()
 
     rows_saved = 0
@@ -358,11 +361,38 @@ def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state):
                 events_skipped = events_skipped + 1
 
                 if events_skipped % UPDATE_BOOKMARK_PERIOD == 0:
-                    LOGGER.info("Skipped %s events so far as they were not for selected tables; %s rows extracted",
-                                events_skipped,
-                                rows_saved)
+                    LOGGER.debug("Skipped %s events so far as they were not for selected tables; %s rows extracted",
+                                 events_skipped,
+                                 rows_saved)
 
-            elif catalog_entry:
+            else:
+
+                # Compare event's columns to the schema properties
+                diff = set(get_db_column_types(binlog_event).keys()).\
+                    difference(catalog_entry.schema.properties.keys())
+
+                # If there are additional cols in the event then run discovery and update the catalog
+                if diff:
+                    #run discovery for the current table only
+                    catalog_entry = discover_catalog(mysql_conn,
+                                                     config.get('filter_dbs'),
+                                                     catalog_entry.table).streams[0]
+
+                    # the new catalog has "stream" property = table name, we need to update that to make it the same as
+                    # the result of the "resolve_catalog" function
+                    catalog_entry.stream = tap_stream_id
+                    desired_columns = list(catalog_entry.schema.properties.keys())
+
+                    # Add the _sdc_deleted_at col
+                    add_automatic_properties(catalog_entry, desired_columns)
+
+                    # update this dictionary while we're at it
+                    binlog_streams_map[tap_stream_id]['catalog_entry'] = catalog_entry
+                    binlog_streams_map[tap_stream_id]['desired_columns'] = desired_columns
+
+                    # send the new scheme to target
+                    write_schema_message(catalog_entry=catalog_entry)
+
                 if isinstance(binlog_event, WriteRowsEvent):
                     rows_saved = handle_write_rows_event(binlog_event,
                                                          catalog_entry,
@@ -387,9 +417,9 @@ def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state):
                                                           rows_saved,
                                                           time_extracted)
                 else:
-                    LOGGER.info("Skipping event for table %s.%s as it is not an INSERT, UPDATE, or DELETE",
-                                binlog_event.schema,
-                                binlog_event.table)
+                    LOGGER.debug("Skipping event for table %s.%s as it is not an INSERT, UPDATE, or DELETE",
+                                 binlog_event.schema,
+                                 binlog_event.table)
 
         # Update log_file and log_pos after every processed binlog event
         log_file = reader.log_file
@@ -449,7 +479,7 @@ def sync_binlog_stream(mysql_conn, config, binlog_streams, state):
             pymysql_wrapper=connection_wrapper
         )
         LOGGER.info("Starting binlog replication with log_file=%s, log_pos=%s", log_file, log_pos)
-        _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state)
+        _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config)
     finally:
         # BinLogStreamReader doesn't implement the `with` methods
         # So, try/finally will close the chain from the top

@@ -47,7 +47,7 @@ def get_test_connection(extra_config=None):
 
 
 def discover_catalog(connection, catalog):
-    catalog = tap_mysql.discover_catalog(connection, catalog)
+    catalog = tap_mysql.discover_catalog(connection, catalog.get('filter_dbs'))
     streams = []
 
     for stream in catalog.streams:

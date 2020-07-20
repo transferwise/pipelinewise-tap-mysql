@@ -7,6 +7,8 @@ import time
 
 from singer import metadata, utils, metrics
 
+from tap_mysql.stream_utils import get_key_properties
+
 LOGGER = singer.get_logger('tap_mysql')
 
 
@@ -54,20 +56,6 @@ def get_database_name(catalog_entry):
     md_map = metadata.to_map(catalog_entry.metadata)
 
     return md_map.get((), {}).get('database-name')
-
-
-def get_key_properties(catalog_entry):
-    catalog_metadata = metadata.to_map(catalog_entry.metadata)
-    stream_metadata = catalog_metadata.get((), {})
-
-    is_view = get_is_view(catalog_entry)
-
-    if is_view:
-        key_properties = stream_metadata.get('view-key-properties', [])
-    else:
-        key_properties = stream_metadata.get('table-key-properties', [])
-
-    return key_properties
 
 
 def generate_select_sql(catalog_entry, columns):

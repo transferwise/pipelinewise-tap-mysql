@@ -6,6 +6,7 @@ import singer
 import singer.metadata
 
 import tap_mysql
+import tap_mysql.discover_utils
 from tap_mysql.connection import connect_with_backoff, MySQLConnection
 
 try:
@@ -234,10 +235,10 @@ class TestSelectsAppropriateColumns(unittest.TestCase):
                                   'b': Schema(None, inclusion='unsupported'),
                                   'c': Schema(None, inclusion='automatic')})
 
-        got_cols = tap_mysql.desired_columns(selected_cols, table_schema)
+        got_cols = tap_mysql.discover_utils.desired_columns(selected_cols, table_schema)
 
         self.assertEqual(got_cols,
-                         set(['a', 'c']),
+                         {'a', 'c'},
                          'Keep automatic as well as selected, available columns.')
 
 
@@ -588,6 +589,16 @@ class TestIncrementalReplication(unittest.TestCase):
 
 class TestBinlogReplication(unittest.TestCase):
 
+    # def tearDown(self) -> None:
+    #     with connect_with_backoff(self.conn) as open_conn:
+    #         with open_conn.cursor() as cursor:
+    #             cursor.execute('DROP TABLE binlog_1;')
+    #             cursor.execute('DROP TABLE binlog_2;')
+    #
+    #         open_conn.commit()
+    #
+    #     self.conn = None
+
     def setUp(self):
         self.maxDiff = None
         self.state = {}
@@ -774,6 +785,91 @@ class TestBinlogReplication(unittest.TestCase):
                            m.record['updated'],
                            m.record.get(binlog.SDC_DELETED_AT) is not None)
                           for m in record_messages])
+
+        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_1', 'log_file'))
+        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_1', 'log_pos'))
+
+        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_2', 'log_file'))
+        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_2', 'log_pos'))
+
+    def test_binlog_stream_with_alteration(self):
+        global SINGER_MESSAGES
+        SINGER_MESSAGES.clear()
+
+        config = test_utils.get_db_config()
+        config['server_id'] = "100"
+
+        tap_mysql.do_sync(self.conn, config, self.catalog, self.state)
+
+        with connect_with_backoff(self.conn) as open_conn:
+            with open_conn.cursor() as cursor:
+                cursor.execute('ALTER TABLE binlog_1 add column is_cancelled boolean;')
+                cursor.execute('INSERT INTO binlog_1 (id, updated, is_cancelled) VALUES (2, \'2017-06-20\', true)')
+                cursor.execute('INSERT INTO binlog_1 (id, updated, is_cancelled) VALUES (3, \'2017-09-21\', false)')
+                cursor.execute('INSERT INTO binlog_2 (id, updated) VALUES (3, \'2017-12-10\')')
+                cursor.execute('ALTER TABLE binlog_1 change column updated date_updated datetime;')
+                cursor.execute('UPDATE binlog_1 set date_updated=\'2018-06-18\' WHERE id = 3')
+
+            open_conn.commit()
+
+        tap_mysql.do_sync(self.conn, config, self.catalog, self.state)
+
+        record_messages = list(filter(lambda m: isinstance(m, singer.RecordMessage), SINGER_MESSAGES))
+
+        message_types = [type(m) for m in SINGER_MESSAGES]
+        self.assertEqual(message_types,
+                         [singer.StateMessage,
+                          singer.SchemaMessage,
+                          singer.SchemaMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.StateMessage, # end of 1st sync
+                          singer.StateMessage, # start of 2nd sync
+                          singer.SchemaMessage,
+                          singer.SchemaMessage,
+                          singer.SchemaMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.StateMessage,
+                          ])
+
+        self.assertEqual([('tap_mysql_test-binlog_1', 1, '2017-06-01T00:00:00+00:00', False),
+                          ('tap_mysql_test-binlog_1', 2, '2017-06-20T00:00:00+00:00', False),
+                          ('tap_mysql_test-binlog_1', 3, '2017-09-22T00:00:00+00:00', False),
+                          ('tap_mysql_test-binlog_2', 1, '2017-10-22T00:00:00+00:00', False),
+                          ('tap_mysql_test-binlog_2', 2, '2017-11-10T00:00:00+00:00', False),
+                          ('tap_mysql_test-binlog_2', 3, '2017-12-10T00:00:00+00:00', False),
+                          ('tap_mysql_test-binlog_1', 3, '2018-06-18T00:00:00+00:00', False),
+                          ('tap_mysql_test-binlog_2', 2, '2018-06-18T00:00:00+00:00', False),
+                          ('tap_mysql_test-binlog_1', 2, '2017-06-20T00:00:00+00:00', True),
+                          ('tap_mysql_test-binlog_2', 1, '2017-10-22T00:00:00+00:00', True)],
+                         [(m.stream,
+                           m.record['id'],
+                           m.record['updated'],
+                           m.record.get(binlog.SDC_DELETED_AT) is not None)
+                          for m in record_messages[:10]])
+
+        self.assertIn('tap_mysql_test-binlog_1', SINGER_MESSAGES[15].stream)
+        self.assertNotIn('date_updated', SINGER_MESSAGES[15].schema['properties'])
+        self.assertNotIn('is_cancelled', SINGER_MESSAGES[15].schema['properties'])
+
+        self.assertIn('tap_mysql_test-binlog_1', SINGER_MESSAGES[17].stream)
+        self.assertIn('date_updated', SINGER_MESSAGES[17].schema['properties'])
+        self.assertIn('is_cancelled', SINGER_MESSAGES[17].schema['properties'])
+
+        self.assertIn('tap_mysql_test-binlog_1', SINGER_MESSAGES[18].stream)
+        self.assertIn('date_updated', SINGER_MESSAGES[18].record)
+        self.assertIn('is_cancelled', SINGER_MESSAGES[18].record)
 
         self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_1', 'log_file'))
         self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_1', 'log_pos'))
