@@ -1,3 +1,8 @@
+1.3.3 (2020-07-23)
+------------------
+During LOG_BASED runtime, detect new columns, incl renamed ones, by comparing the columns in the binlog event to the stream schema, and if there are any additional columns, run discovery and send a new SCHEMA message to target. This helps avoid data loss.
+
+
 1.3.2 (2020-06-15)
 -------------------
 
