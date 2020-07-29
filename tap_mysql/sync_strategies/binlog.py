@@ -131,7 +131,6 @@ def json_bytes_to_string(data):
 def row_to_singer_record(catalog_entry, version, db_column_map, row, time_extracted):
     row_to_persist = {}
 
-    LOGGER.debug('Converting row "%s" to singer record ...', row)
     LOGGER.debug('Schema properties: %s',catalog_entry.schema.properties)
     LOGGER.debug('Event columns: %s', db_column_map)
 
@@ -375,14 +374,15 @@ def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config: Dict
             else:
 
                 # Compare event's columns to the schema properties
+                # if a column no longer exists, the event will have something like __dropped_col_XY__
+                # to refer to this column, we don't want these columns to be included in the difference
                 diff = set(filter(lambda k: False if re.match(r'__dropped_col_\d+__', k) else True,
                                   get_db_column_types(binlog_event).keys())).\
                     difference(catalog_entry.schema.properties.keys())
 
-                LOGGER.info('Diff %s', diff)
-
                 # If there are additional cols in the event then run discovery and update the catalog
                 if diff:
+                    LOGGER.debug('Difference between event and schema: %s', diff)
                     LOGGER.info('Running discovery ... ')
 
                     #run discovery for the current table only
@@ -393,12 +393,12 @@ def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config: Dict
                     selected = {k for k, v in catalog_entry.schema.properties.items()
                                 if common.property_is_selected(catalog_entry, k)}
 
-                    # These are the columns we need to select
-                    columns = list(desired_columns(selected, catalog_entry.schema))
-
                     # the new catalog has "stream" property = table name, we need to update that to make it the same as
                     # the result of the "resolve_catalog" function
                     catalog_entry.stream = tap_stream_id
+
+                    # These are the columns we need to select
+                    columns = list(desired_columns(selected, catalog_entry.schema))
 
                     # Add the _sdc_deleted_at col
                     add_automatic_properties(catalog_entry, columns)
