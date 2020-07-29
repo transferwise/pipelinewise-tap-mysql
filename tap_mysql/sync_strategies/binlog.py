@@ -4,6 +4,8 @@ import codecs
 import copy
 import datetime
 import json
+import re
+
 import pymysql.connections
 import pymysql.err
 import pytz
@@ -128,6 +130,10 @@ def json_bytes_to_string(data):
 
 def row_to_singer_record(catalog_entry, version, db_column_map, row, time_extracted):
     row_to_persist = {}
+
+    LOGGER.debug('Converting row "%s" to singer record ...', row)
+    LOGGER.debug('Schema properties: %s',catalog_entry.schema.properties)
+    LOGGER.debug('Event columns: %s', db_column_map)
 
     for column_name, val in row.items():
         property_type = catalog_entry.schema.properties[column_name].type
@@ -297,6 +303,7 @@ def handle_update_rows_event(event, catalog_entry, state, columns, rows_saved, t
 def handle_delete_rows_event(event, catalog_entry, state, columns, rows_saved, time_extracted):
     stream_version = common.get_stream_version(catalog_entry.tap_stream_id, state)
     db_column_types = get_db_column_types(event)
+    db_column_types[SDC_DELETED_AT] = 15 # set _sdc_deleted_at as a varchar column
 
     for row in event.rows:
         event_ts = datetime.datetime.utcfromtimestamp(event.timestamp).replace(tzinfo=pytz.UTC)
@@ -368,11 +375,16 @@ def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config: Dict
             else:
 
                 # Compare event's columns to the schema properties
-                diff = set(get_db_column_types(binlog_event).keys()).\
+                diff = set(filter(lambda k: False if re.match(r'__dropped_col_\d+__', k) else True,
+                                  get_db_column_types(binlog_event).keys())).\
                     difference(catalog_entry.schema.properties.keys())
+
+                LOGGER.info('Diff %s', diff)
 
                 # If there are additional cols in the event then run discovery and update the catalog
                 if diff:
+                    LOGGER.info('Running discovery ... ')
+
                     #run discovery for the current table only
                     catalog_entry = discover_catalog(mysql_conn,
                                                      config.get('filter_dbs'),
