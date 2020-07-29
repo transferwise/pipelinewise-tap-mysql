@@ -803,8 +803,9 @@ class TestBinlogReplication(unittest.TestCase):
 
         with connect_with_backoff(self.conn) as open_conn:
             with open_conn.cursor() as cursor:
+                cursor.execute('ALTER TABLE binlog_1 add column data blob;')
                 cursor.execute('ALTER TABLE binlog_1 add column is_cancelled boolean;')
-                cursor.execute('INSERT INTO binlog_1 (id, updated, is_cancelled) VALUES (2, \'2017-06-20\', true)')
+                cursor.execute('INSERT INTO binlog_1 (id, updated, is_cancelled, data) VALUES (2, \'2017-06-20\', true, \'blob content\')')
                 cursor.execute('INSERT INTO binlog_1 (id, updated, is_cancelled) VALUES (3, \'2017-09-21\', false)')
                 cursor.execute('INSERT INTO binlog_2 (id, updated) VALUES (3, \'2017-12-10\')')
                 cursor.execute('ALTER TABLE binlog_1 change column updated date_updated datetime;')
