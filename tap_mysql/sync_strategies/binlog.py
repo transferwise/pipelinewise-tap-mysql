@@ -302,7 +302,6 @@ def handle_update_rows_event(event, catalog_entry, state, columns, rows_saved, t
 def handle_delete_rows_event(event, catalog_entry, state, columns, rows_saved, time_extracted):
     stream_version = common.get_stream_version(catalog_entry.tap_stream_id, state)
     db_column_types = get_db_column_types(event)
-    db_column_types[SDC_DELETED_AT] = 15 # set _sdc_deleted_at as a varchar column
 
     for row in event.rows:
         event_ts = datetime.datetime.utcfromtimestamp(event.timestamp).replace(tzinfo=pytz.UTC)
