@@ -751,6 +751,13 @@ class TestBinlogReplication(unittest.TestCase):
         config['server_id'] = "100"
 
         tap_mysql.do_sync(self.conn, config, self.catalog, self.state)
+
+        schema_messages = list(filter(lambda m: isinstance(m, singer.SchemaMessage), SINGER_MESSAGES))
+
+        for schema_msg in schema_messages:
+            for prop, val in schema_msg.schema['properties'].items():
+                self.assertIn('type', val, f'property "{prop}" has no "type" in stream "{schema_msg.stream}"')
+
         record_messages = list(filter(lambda m: isinstance(m, singer.RecordMessage), SINGER_MESSAGES))
 
         message_types = [type(m) for m in SINGER_MESSAGES]
@@ -814,6 +821,12 @@ class TestBinlogReplication(unittest.TestCase):
             open_conn.commit()
 
         tap_mysql.do_sync(self.conn, config, self.catalog, self.state)
+
+        schema_messages = list(filter(lambda m: isinstance(m, singer.SchemaMessage), SINGER_MESSAGES))
+
+        for schema_msg in schema_messages:
+            for prop, val in schema_msg.schema['properties'].items():
+                self.assertIn('type', val, f'property "{prop}" has no "type" in stream "{schema_msg.stream}"')
 
         record_messages = list(filter(lambda m: isinstance(m, singer.RecordMessage), SINGER_MESSAGES))
 
