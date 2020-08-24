@@ -42,7 +42,7 @@ BYTES_FOR_INTEGER_TYPE = {
 
 FLOAT_TYPES = {'float', 'double'}
 
-DATETIME_TYPES = {'datetime', 'timestamp', 'date', 'time'}
+DATETIME_TYPES = {'datetime', 'timestamp', 'date'}
 
 BINARY_TYPES = {'binary', 'varbinary'}
 
@@ -207,6 +207,10 @@ def schema_for_column(column):
     elif data_type in DATETIME_TYPES:
         result.type = ['null', 'string']
         result.format = 'date-time'
+
+    elif data_type == 'time':
+        result.type = ['null', 'string']
+        result.format = 'time'
 
     elif data_type in BINARY_TYPES:
         result.type = ['null', 'string']
