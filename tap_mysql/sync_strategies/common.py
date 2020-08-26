@@ -89,6 +89,8 @@ def row_to_singer_record(catalog_entry, version, row, columns, time_extracted):
     row_to_persist = ()
     for idx, elem in enumerate(row):
         property_type = catalog_entry.schema.properties[columns[idx]].type
+        property_format = catalog_entry.schema.properties[columns[idx]].format
+
         if isinstance(elem, datetime.datetime):
             row_to_persist += (elem.isoformat() + '+00:00',)
 
@@ -96,9 +98,12 @@ def row_to_singer_record(catalog_entry, version, row, columns, time_extracted):
             row_to_persist += (elem.isoformat() + 'T00:00:00+00:00',)
 
         elif isinstance(elem, datetime.timedelta):
-            epoch = datetime.datetime.utcfromtimestamp(0)
-            timedelta_from_epoch = epoch + elem
-            row_to_persist += (timedelta_from_epoch.isoformat() + '+00:00',)
+            if property_format == 'time':
+                row_to_persist=(str(elem),) # this should convert time column into 'HH:MM:SS' formatted string
+            else:
+                epoch = datetime.datetime.utcfromtimestamp(0)
+                timedelta_from_epoch = epoch + elem
+                row_to_persist += (timedelta_from_epoch.isoformat() + '+00:00',)
 
         elif 'boolean' in property_type or property_type == 'boolean':
             if elem is None:
