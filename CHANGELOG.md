@@ -1,3 +1,7 @@
+1.3.5 (2020-08-27)
+------------------
+Properly support `time` sql type.
+
 1.3.4 (2020-08-05)
 ------------------
 Fix few issues with new discovered schema after changes are detected during LOG_BASED runtime.
