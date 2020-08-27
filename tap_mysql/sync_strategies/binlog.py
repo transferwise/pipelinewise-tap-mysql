@@ -136,7 +136,10 @@ def row_to_singer_record(catalog_entry, version, db_column_map, row, time_extrac
 
     for column_name, val in row.items():
         property_type = catalog_entry.schema.properties[column_name].type
+        property_format = catalog_entry.schema.properties[column_name].format
         db_column_type = db_column_map.get(column_name)
+
+        LOGGER.info('%s %s %s %s',column_name, val, property_type, db_column_type)
 
         if isinstance(val, datetime.datetime):
             if db_column_type in MYSQL_TIMESTAMP_TYPES:
@@ -155,8 +158,12 @@ def row_to_singer_record(catalog_entry, version, db_column_map, row, time_extrac
             row_to_persist[column_name] = val.isoformat() + 'T00:00:00+00:00'
 
         elif isinstance(val, datetime.timedelta):
-            timedelta_from_epoch = datetime.datetime.utcfromtimestamp(0) + val
-            row_to_persist[column_name] = timedelta_from_epoch.isoformat() + '+00:00'
+            if property_format == 'time':
+                # this should convert time column into 'HH:MM:SS' formatted string
+                row_to_persist[column_name] = str(val)
+            else:
+                timedelta_from_epoch = datetime.datetime.utcfromtimestamp(0) + val
+                row_to_persist[column_name] = timedelta_from_epoch.isoformat() + '+00:00'
 
         elif db_column_type == FIELD_TYPE.JSON:
             row_to_persist[column_name] = json.dumps(json_bytes_to_string(val))

@@ -12,9 +12,7 @@ from singer.catalog import Catalog, CatalogEntry
 from tap_mysql.connection import connect_with_backoff
 from tap_mysql.sync_strategies import common
 
-
 LOGGER = get_logger('tap_mysql')
-
 
 Column = collections.namedtuple('Column', [
     "table_schema",
@@ -26,7 +24,6 @@ Column = collections.namedtuple('Column', [
     "numeric_scale",
     "column_type",
     "column_key"])
-
 
 pymysql.converters.conversions[pendulum.Pendulum] = pymysql.converters.escape_datetime
 
@@ -42,7 +39,7 @@ BYTES_FOR_INTEGER_TYPE = {
 
 FLOAT_TYPES = {'float', 'double'}
 
-DATETIME_TYPES = {'datetime', 'timestamp', 'date', 'time'}
+DATETIME_TYPES = {'datetime', 'timestamp', 'date'}
 
 BINARY_TYPES = {'binary', 'varbinary'}
 
@@ -164,8 +161,10 @@ def discover_catalog(mysql_conn: Dict, dbs: str = None, tables: Optional[str] = 
 
     return Catalog(entries)
 
-def schema_for_column(column):
+
+def schema_for_column(column): # pylint: disable=too-many-branches
     """Returns the Schema object for the given Column."""
+
     data_type = column.data_type.lower()
     column_type = column.column_type.lower()
 
@@ -207,6 +206,10 @@ def schema_for_column(column):
     elif data_type in DATETIME_TYPES:
         result.type = ['null', 'string']
         result.format = 'date-time'
+
+    elif data_type == 'time':
+        result.type = ['null', 'string']
+        result.format = 'time'
 
     elif data_type in BINARY_TYPES:
         result.type = ['null', 'string']
@@ -272,6 +275,7 @@ def resolve_catalog(discovered_catalog, streams_to_sync):
         ))
 
     return result
+
 
 def desired_columns(selected, table_schema):
     '''Return the set of column names we need to include in the SELECT.
