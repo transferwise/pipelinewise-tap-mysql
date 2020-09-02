@@ -139,8 +139,6 @@ def row_to_singer_record(catalog_entry, version, db_column_map, row, time_extrac
         property_format = catalog_entry.schema.properties[column_name].format
         db_column_type = db_column_map.get(column_name)
 
-        LOGGER.info('%s %s %s %s',column_name, val, property_type, db_column_type)
-
         if isinstance(val, datetime.datetime):
             if db_column_type in MYSQL_TIMESTAMP_TYPES:
                 # The mysql-replication library creates datetimes from TIMESTAMP columns using fromtimestamp which
