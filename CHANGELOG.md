@@ -1,3 +1,7 @@
+1.3.6 (2020-09-02)
+------------------
+Remove info log
+
 1.3.5 (2020-08-27)
 ------------------
 Properly support `time` sql type.
