@@ -13,6 +13,7 @@ import singer
 import tzlocal
 
 from typing import Dict
+from plpygis import Geometry
 from pymysqlreplication import BinLogStreamReader
 from pymysqlreplication.constants import FIELD_TYPE
 from pymysqlreplication.event import RotateEvent
@@ -166,6 +167,14 @@ def row_to_singer_record(catalog_entry, version, db_column_map, row, time_extrac
         elif db_column_type == FIELD_TYPE.JSON:
             row_to_persist[column_name] = json.dumps(json_bytes_to_string(val))
 
+        elif property_format == 'spatial':
+            if val:
+                srid = int.from_bytes(val[:4], byteorder='little')
+                geom = Geometry(val[4:], srid=srid)
+                row_to_persist[column_name] = json.dumps(geom.geojson)
+            else:
+                row_to_persist[column_name] = None
+            
         elif isinstance(val, bytes):
             # encode bytes as hex bytes then to utf8 string
             row_to_persist[column_name] = codecs.encode(val, 'hex').decode('utf-8')
