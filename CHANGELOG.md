@@ -1,3 +1,7 @@
+1.3.8 (2020-10-16)
+------------------
+Fix mapping bit to boolean values
+
 1.3.7 (2020-09-04)
 ------------------
 Fix for time sql type.
