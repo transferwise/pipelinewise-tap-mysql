@@ -1166,6 +1166,48 @@ class TestSessionSqls(unittest.TestCase):
                                                  'SET SESSION wait_timeout=28800'])
 
 
+class TestBitBooleanMapping(unittest.TestCase):
+    
+    def setUp(self):
+        self.conn = test_utils.get_test_connection()
+
+        with connect_with_backoff(self.conn) as open_conn:
+            with open_conn.cursor() as cursor:
+                cursor.execute("CREATE TABLE bit_booleans_table(`id` int, `c_bit` BIT(4))")
+                cursor.execute("INSERT INTO bit_booleans_table(`id`,`c_bit`) VALUES "
+                    "(1, b'0000'),"
+                    "(2, NULL),"
+                    "(3, b'0010')")
+
+        self.catalog = test_utils.discover_catalog(self.conn, {})
+
+
+    def test_sync_messages_are_correct(self):
+
+        self.catalog.streams[0] = test_utils.set_replication_method_and_key(self.catalog.streams[0], 'FULL_TABLE', None)
+        self.catalog.streams[0] = test_utils.set_selected(self.catalog.streams[0], True)
+
+        global SINGER_MESSAGES
+        SINGER_MESSAGES.clear()
+
+        tap_mysql.do_sync(self.conn, {}, self.catalog, {})
+
+        record_messages = list(filter(lambda m: isinstance(m, singer.RecordMessage), SINGER_MESSAGES))
+
+        self.assertEqual(len(record_messages), 3)
+        self.assertListEqual([
+            {'id': 1, 'c_bit': False},
+            {'id': 2, 'c_bit': None},
+            {'id': 3, 'c_bit': True},
+        ], [rec.record for rec in record_messages])
+
+
+    def tearDown(self) -> None:
+        with connect_with_backoff(self.conn) as open_conn:
+            with open_conn.cursor() as cursor:
+                cursor.execute('DROP TABLE bit_booleans_table;')
+
+
 if __name__ == "__main__":
     test1 = TestBinlogReplication()
     test1.setUp()
