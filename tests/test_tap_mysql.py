@@ -1103,7 +1103,6 @@ class TestSupportedPK(unittest.TestCase):
                                "(BINARY('d'), 40)")
 
         self.catalog = test_utils.discover_catalog(self.conn, {})
-        print(f"CATALOOOOOG: {self.catalog.to_dict()}")
 
     def test_primary_key_is_in_metadata(self):
         primary_keys = {}
