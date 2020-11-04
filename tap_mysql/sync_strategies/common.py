@@ -112,7 +112,7 @@ def row_to_singer_record(catalog_entry, version, row, columns, time_extracted):
         elif 'boolean' in property_type or property_type == 'boolean':
             if elem is None:
                 boolean_representation = None
-            elif elem == 0:
+            elif elem == 0 or elem == b'\x00':
                 boolean_representation = False
             else:
                 boolean_representation = True
