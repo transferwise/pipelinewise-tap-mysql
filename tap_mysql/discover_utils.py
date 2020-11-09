@@ -43,6 +43,10 @@ DATETIME_TYPES = {'datetime', 'timestamp', 'date'}
 
 BINARY_TYPES = {'binary', 'varbinary'}
 
+SPATIAL_TYPES = {'geometry', 'point', 'linestring',
+                 'polygon', 'multipoint', 'multilinestring',
+                 'multipolygon', 'geometrycollection'}
+
 
 def discover_catalog(mysql_conn: Dict, dbs: str = None, tables: Optional[str] = None):
     """Returns a Catalog describing the structure of the database."""
@@ -162,7 +166,7 @@ def discover_catalog(mysql_conn: Dict, dbs: str = None, tables: Optional[str] = 
     return Catalog(entries)
 
 
-def schema_for_column(column): # pylint: disable=too-many-branches
+def schema_for_column(column):  # pylint: disable=too-many-branches
     """Returns the Schema object for the given Column."""
 
     data_type = column.data_type.lower()
@@ -214,6 +218,10 @@ def schema_for_column(column): # pylint: disable=too-many-branches
     elif data_type in BINARY_TYPES:
         result.type = ['null', 'string']
         result.format = 'binary'
+
+    elif data_type in SPATIAL_TYPES:
+        result.type = ['null', 'object']
+        result.format = 'spatial'
 
     else:
         result = Schema(None,
