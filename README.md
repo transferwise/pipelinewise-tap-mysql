@@ -421,6 +421,50 @@ This invocation extracts any data since (and including) the
 {"type": "STATE", "value": {"bookmarks": {"example_db-animals": {"replication_key": "id", "version": 1509135204169, "replication_key_value": 6}}, "currently_syncing": null}}
 ```
 
+## To run tests:
+
+1. You'll need to have a running MySQL or MariaDB server to run the tests. Run the following SQL commands as a privileged user to create the required objects:
+```
+CREATE USER <mysql-user> IDENTIFIED BY '<mysql-password>';
+CREATE DATABASE tap_mysql_test;
+GRANT ALL PRIVILEGES ON tap_mysql_test.* TO <mysql-user>;
+```
+
+**Note**: The user and password can be anything but the database name needs to be `tap_mysql_test`.
+
+2. Define the environment variables that are required to run the tests:
+```
+  export TAP_MYSQL_HOST=<mysql-host>
+  export TAP_MYSQL_PORT=<mysql-port>
+  export TAP_MYSQL_USER=<mysql-user>
+  export TAP_MYSQL_PASSWORD=<mysql-password>
+```
+
+3. Install python test dependencies in a virtual env
+
+```bash
+python3 -m venv venv
+. venv/bin/activate
+pip install --upgrade pip
+pip install .[test]
+```
+
+4. To run tests:
+```bash
+nosetests -c .noserc tests
+```
+
+### To run pylint:
+
+1. Install python dependencies and run python linter
+```
+  python3 -m venv venv
+  . venv/bin/activate
+  pip install --upgrade pip
+  pip install .[test]
+  pylint --rcfile .pylintrc tap_mysql
+```
+
 ---
 
 Based on Stitch documentation
