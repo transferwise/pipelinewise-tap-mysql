@@ -291,7 +291,7 @@ def do_sync_full_table(mysql_conn, catalog_entry, state, columns):
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
 
-def sync_non_binlog_streams(mysql_conn, non_binlog_catalog, config, state):
+def sync_non_binlog_streams(mysql_conn, non_binlog_catalog, state):
     for catalog_entry in non_binlog_catalog.streams:
         columns = list(catalog_entry.schema.properties.keys())
 
@@ -342,7 +342,7 @@ def do_sync(mysql_conn, config, catalog, state):
     non_binlog_catalog = get_non_binlog_streams(mysql_conn, catalog, config, state)
     binlog_catalog = get_binlog_streams(mysql_conn, catalog, config, state)
 
-    sync_non_binlog_streams(mysql_conn, non_binlog_catalog, config, state)
+    sync_non_binlog_streams(mysql_conn, non_binlog_catalog, state)
     sync_binlog_streams(mysql_conn, binlog_catalog, config, state)
 
 
