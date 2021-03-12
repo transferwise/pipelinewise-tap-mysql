@@ -539,7 +539,7 @@ def sync_binlog_stream(mysql_conn, config, binlog_streams, state) -> None:
         reader = BinLogStreamReader(
             connection_settings={},
             server_id=server_id,
-            slave_uuid=f'slave-{server_id}',
+            slave_uuid=f'pipelinewise-slave-{server_id}',
             log_file=log_file,
             log_pos=log_pos,
             resume_stream=True,
