@@ -174,7 +174,7 @@ def row_to_singer_record(catalog_entry, version, db_column_map, row, time_extrac
                 row_to_persist[column_name] = json.dumps(geom.geojson)
             else:
                 row_to_persist[column_name] = None
-            
+
         elif isinstance(val, bytes):
             # encode bytes as hex bytes then to utf8 string
             row_to_persist[column_name] = codecs.encode(val, 'hex').decode('utf-8')
@@ -360,11 +360,37 @@ def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config: Dict
     rows_saved = 0
     events_skipped = 0
 
-    current_log_file, current_log_pos = fetch_current_log_file_and_pos(mysql_conn)
+    end_log_file, end_log_pos = fetch_current_log_file_and_pos(mysql_conn)
+    LOGGER.info('Current Master binlog file and pos: %s %s', end_log_file, end_log_pos)
+
     log_file = None
     log_pos = None
 
+    # Exit from the loop when the reader either runs out of streams to return or we reach the end position (which is
+    # is Master's)
     for binlog_event in reader:
+
+        # get reader current binlog file and position
+        log_file = reader.log_file
+        log_pos = reader.log_pos
+
+        # The iterator across python-mysql-replication's fetchone method should ultimately terminate
+        # upon receiving an EOF packet. There seem to be some cases when a MySQL server will not send
+        # one causing binlog replication to hang.
+        if (log_file > end_log_file) or (end_log_file == log_file and log_pos >= end_log_pos):
+            LOGGER.info('BinLog reader (file: %s, pos:%s) has reached or exceeded end position, exiting!',
+                        log_file,
+                        log_pos)
+
+            # There are cases when a mass operation (inserts, updates, deletes) starts right after we get the Master
+            # binlog file and position above, making the latter behind the stream reader and it causes some data loss
+            # in the next run by skipping everything between end_log_file and log_pos
+            # so we need to update log_pos back to master's position
+            log_file = end_log_file
+            log_pos = end_log_file
+
+            break
+
         if isinstance(binlog_event, RotateEvent):
             state = update_bookmarks(state,
                                      binlog_streams_map,
@@ -390,7 +416,7 @@ def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config: Dict
                 # if a column no longer exists, the event will have something like __dropped_col_XY__
                 # to refer to this column, we don't want these columns to be included in the difference
                 diff = set(filter(lambda k: False if re.match(r'__dropped_col_\d+__', k) else True,
-                                  get_db_column_types(binlog_event).keys())).\
+                                  get_db_column_types(binlog_event).keys())). \
                     difference(catalog_entry.schema.properties.keys())
 
                 # If there are additional cols in the event then run discovery and update the catalog
@@ -400,8 +426,8 @@ def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config: Dict
 
                     # run discovery for the current table only
                     new_catalog_entry = discover_catalog(mysql_conn,
-                                                     config.get('filter_dbs'),
-                                                     catalog_entry.table).streams[0]
+                                                         config.get('filter_dbs'),
+                                                         catalog_entry.table).streams[0]
 
                     selected = {k for k, v in new_catalog_entry.schema.properties.items()
                                 if common.property_is_selected(new_catalog_entry, k)}
@@ -461,16 +487,6 @@ def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config: Dict
                                  binlog_event.schema,
                                  binlog_event.table)
 
-        # Update log_file and log_pos after every processed binlog event
-        log_file = reader.log_file
-        log_pos = reader.log_pos
-
-        # The iterator across python-mysql-replication's fetchone method should ultimately terminate
-        # upon receiving an EOF packet. There seem to be some cases when a MySQL server will not send
-        # one causing binlog replication to hang.
-        if current_log_file == log_file and log_pos >= current_log_pos:
-            break
-
         # Update singer bookmark and send STATE message periodically
         if ((rows_saved and rows_saved % UPDATE_BOOKMARK_PERIOD == 0) or
                 (events_skipped and events_skipped % UPDATE_BOOKMARK_PERIOD == 0)):
@@ -480,6 +496,8 @@ def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config: Dict
                                      log_pos)
             singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
+    LOGGER.info('Processed %s rows', rows_saved)
+
     # Update singer bookmark at the last time to point it the the last processed binlog event
     if log_file and log_pos:
         state = update_bookmarks(state,
@@ -488,7 +506,17 @@ def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config: Dict
                                  log_pos)
 
 
-def sync_binlog_stream(mysql_conn, config, binlog_streams, state):
+def sync_binlog_stream(mysql_conn, config, binlog_streams, state) -> None:
+    """
+    Capture the binlog events created between the pos in the state and current Master position and creates Singer
+    streams to be flushed to stdout
+    Args:
+        mysql_conn: mysql connection instance
+        config: tap config
+        binlog_streams: tables to stream using binlog
+        state: the current state
+
+    """
     binlog_streams_map = generate_streams_map(binlog_streams)
 
     for tap_stream_id, _ in binlog_streams_map.items():
@@ -511,15 +539,18 @@ def sync_binlog_stream(mysql_conn, config, binlog_streams, state):
         reader = BinLogStreamReader(
             connection_settings={},
             server_id=server_id,
-            slave_uuid=f'stitch-slave-{server_id}',
+            slave_uuid=f'slave-{server_id}',
             log_file=log_file,
             log_pos=log_pos,
             resume_stream=True,
             only_events=[RotateEvent, WriteRowsEvent, UpdateRowsEvent, DeleteRowsEvent],
             pymysql_wrapper=connection_wrapper
         )
+
         LOGGER.info("Starting binlog replication with log_file=%s, log_pos=%s", log_file, log_pos)
+
         _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config)
+
     finally:
         # BinLogStreamReader doesn't implement the `with` methods
         # So, try/finally will close the chain from the top
