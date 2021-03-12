@@ -1,3 +1,8 @@
+1.4.1 (2021-03-12)
+------------------
+* Fix data loss during log based replication by processesing binglog events until a saved Master position.
+* Bump mysql-replication from 0.22 to 0.23
+
 1.4.0 (2020-11-09)
 ------------------
 Support MySQL spatial types
