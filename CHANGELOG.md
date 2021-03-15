@@ -1,3 +1,7 @@
+1.4.2 (2021-03-15)
+------------------
+* Fix a typo
+
 1.4.1 (2021-03-12)
 ------------------
 * Fix data loss during log based replication by processesing binglog events until a saved Master position.
