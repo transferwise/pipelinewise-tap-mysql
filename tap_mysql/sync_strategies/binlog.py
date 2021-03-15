@@ -387,7 +387,7 @@ def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config: Dict
             # in the next run by skipping everything between end_log_file and log_pos
             # so we need to update log_pos back to master's position
             log_file = end_log_file
-            log_pos = end_log_file
+            log_pos = end_log_pos
 
             break
 
