@@ -64,7 +64,7 @@ def generate_select_sql(catalog_entry, columns):
     escaped_table = escape(catalog_entry.table)
     escaped_columns = []
 
-    for idx, col_name in enumerate(columns):
+    for col_name in columns:
         # wrap the column name in "`"
         escaped_col = escape(col_name)
 
@@ -73,10 +73,10 @@ def generate_select_sql(catalog_entry, columns):
 
         # if the column format is binary, fetch the values after removing any trailing
         # null bytes 0x00 and hexifying the column.
-        if 'binary' == property_format:
+        if property_format == 'binary':
             escaped_columns.append(
                 f'hex(trim(trailing CHAR(0x00) from {escaped_col})) as {escaped_col}')
-        elif 'spatial' == property_format:
+        elif property_format == 'spatial':
             escaped_columns.append(
                 f'ST_AsGeoJSON({escaped_col}) as {escaped_col}')
         else:
@@ -112,7 +112,7 @@ def row_to_singer_record(catalog_entry, version, row, columns, time_extracted):
         elif 'boolean' in property_type or property_type == 'boolean':
             if elem is None:
                 boolean_representation = None
-            elif elem == 0 or elem == b'\x00':
+            elif elem in (0, b'\x00'):
                 boolean_representation = False
             else:
                 boolean_representation = True
