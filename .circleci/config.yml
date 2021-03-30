@@ -4,7 +4,7 @@ references:
   container_config: &container_config
     docker:
       # Main Python container
-      - image: circleci/python:3.8
+      - image: circleci/python:3.6
         environment:
           TAP_MYSQL_PORT: 3306
           TAP_MYSQL_USER: root
