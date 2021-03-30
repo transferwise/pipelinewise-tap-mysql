@@ -51,7 +51,7 @@ jobs:
           command: |
             . ./virtualenvs/tap-mysql/bin/activate
             export LOGGING_CONF_FILE=./sample_logging.conf
-            nosetests -c .noserc --cover-min-percentage=87 tests/integration
+            nosetests -c .noserc --cover-min-percentage=86 tests/integration
 
 
 workflows:
