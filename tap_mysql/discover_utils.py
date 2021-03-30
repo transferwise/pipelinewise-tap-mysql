@@ -5,7 +5,7 @@ import itertools
 import pendulum
 import pymysql
 
-from typing import Optional, Dict
+from typing import Optional, Dict, Tuple, Set
 from singer import metadata, Schema, get_logger
 from singer.catalog import Catalog, CatalogEntry
 
@@ -27,7 +27,15 @@ Column = collections.namedtuple('Column', [
 
 pymysql.converters.conversions[pendulum.Pendulum] = pymysql.converters.escape_datetime
 
-STRING_TYPES = {'char', 'enum', 'longtext', 'mediumtext', 'text', 'varchar'}
+STRING_TYPES = {
+    'char',
+    'enum',
+    'tinytext',
+    'longtext',
+    'mediumtext',
+    'text',
+    'varchar'
+}
 
 BYTES_FOR_INTEGER_TYPE = {
     'tinyint': 1,
@@ -37,15 +45,97 @@ BYTES_FOR_INTEGER_TYPE = {
     'bigint': 8
 }
 
-FLOAT_TYPES = {'float', 'double'}
+BOOL_TYPES = {'bit'}
 
-DATETIME_TYPES = {'datetime', 'timestamp', 'date'}
+JSON_TYPES = {'json'}
+
+FLOAT_TYPES = {'float', 'double', 'decimal'}
+
+DATETIME_TYPES = {'datetime', 'timestamp', 'time', 'date'}
 
 BINARY_TYPES = {'binary', 'varbinary'}
 
 SPATIAL_TYPES = {'geometry', 'point', 'linestring',
                  'polygon', 'multipoint', 'multilinestring',
                  'multipolygon', 'geometrycollection'}
+
+# A set of all supported column types listed above
+SUPPORTED_COLUMN_TYPES_AGGREGATED = \
+    STRING_TYPES \
+        .union(FLOAT_TYPES) \
+        .union(DATETIME_TYPES) \
+        .union(BINARY_TYPES) \
+        .union(SPATIAL_TYPES) \
+        .union(BOOL_TYPES) \
+        .union(JSON_TYPES) \
+        .union(BYTES_FOR_INTEGER_TYPE.keys())
+
+
+def is_supported_column_type(column_sql_type: str) -> bool:
+    """
+    Checks if the given sql type is supported
+
+    Args:
+        column_sql_type: Column sql data type from the catalog metadata
+            could be in the format {TYPE}(size) or {TYPE}, e.g bigint(100), timestamp ..etc
+
+    Returns: True if column type is supported, False otherwise
+    """
+    try:
+        # handle types where the size is included such as varchar(10)
+        # get the index of the parentheses to use later
+        idx = column_sql_type.index('(')
+    except ValueError:
+        # if type has no size then we can use it as it
+        truncated_sql_type = column_sql_type.lower()
+    else:
+        # fetch only the substring from start till the parentheses
+        truncated_sql_type = column_sql_type[:idx].lower()
+
+    # The above should process should never result in an empty string
+    # so to err on the safe side, let's raise an exception in case that ever happens
+    if not truncated_sql_type:
+        raise Exception(
+            f'Something went wrong! Processing type `{column_sql_type}` results in empty value `{truncated_sql_type}`')
+
+    return truncated_sql_type in SUPPORTED_COLUMN_TYPES_AGGREGATED
+
+
+def should_run_discovery(column_names: Set[str], md_map: Dict[Tuple, Dict]) -> bool:
+    """
+    Checks if we need to run discovery using a given metadata mapping.
+
+    This function is helpful to refresh a stream schema when we detect a new column while syncing.
+
+    The discovery will run if one of the following conditions are met:
+        - one of the given columns is not in the given metadata, ie we know nothing about this column
+        - the column is selected by default and its type is among the supported sql types.
+
+    Args:
+        column_names: A set of column names as strings
+        md_map: a stream metadata as a map, usually you get it by running:
+        >> import singer
+        >> md_map = singer.metadata.to_map(stream_catalog['metadata'])
+
+    Returns: True if we should run discovery, False otherwise
+
+    """
+    LOGGER.debug('should_run_discovery with (%s)...', column_names)
+
+    for column_name in column_names:
+        md_properties = md_map.get(('properties', column_name))
+
+        # this column doesn't exists in the metadata so we know nothing about it
+        # so will have to run discovery
+        if not md_properties:
+            LOGGER.debug('Will run discovery because `%s` not in stream metadata', column_name)
+            return True
+
+        if md_properties['selected-by-default'] and is_supported_column_type(md_properties['sql-datatype']):
+            LOGGER.debug('Will run discovery because `%s` is selected by default and of supported type', column_name)
+            return True
+
+    return False
 
 
 def discover_catalog(mysql_conn: Dict, dbs: str = None, tables: Optional[str] = None):
@@ -179,13 +269,13 @@ def schema_for_column(column):  # pylint: disable=too-many-branches
 
     result = Schema(inclusion=inclusion)
 
-    if data_type == 'bit' or column_type.startswith('tinyint(1)'):
+    if data_type in BOOL_TYPES or column_type.startswith('tinyint(1)'):
         result.type = ['null', 'boolean']
 
     elif data_type in BYTES_FOR_INTEGER_TYPE:
         result.type = ['null', 'integer']
         bits = BYTES_FOR_INTEGER_TYPE[data_type] * 8
-        if 'unsigned' in column.column_type:
+        if 'unsigned' in column_type:
             result.minimum = 0
             result.maximum = 2 ** bits - 1
         else:
@@ -195,13 +285,11 @@ def schema_for_column(column):  # pylint: disable=too-many-branches
     elif data_type in FLOAT_TYPES:
         result.type = ['null', 'number']
 
-    elif data_type == 'json':
-        result.type = ['null', 'object']
+        if data_type == 'decimal':
+            result.multipleOf = 10 ** (0 - column.numeric_scale)
 
-    elif data_type == 'decimal':
-        result.type = ['null', 'number']
-        result.multipleOf = 10 ** (0 - column.numeric_scale)
-        return result
+    elif data_type in JSON_TYPES:
+        result.type = ['null', 'object']
 
     elif data_type in STRING_TYPES:
         result.type = ['null', 'string']
@@ -209,11 +297,11 @@ def schema_for_column(column):  # pylint: disable=too-many-branches
 
     elif data_type in DATETIME_TYPES:
         result.type = ['null', 'string']
-        result.format = 'date-time'
 
-    elif data_type == 'time':
-        result.type = ['null', 'string']
-        result.format = 'time'
+        if data_type == 'time':
+            result.format = 'time'
+        else:
+            result.format = 'date-time'
 
     elif data_type in BINARY_TYPES:
         result.type = ['null', 'string']
@@ -285,12 +373,13 @@ def resolve_catalog(discovered_catalog, streams_to_sync):
     return result
 
 
-def desired_columns(selected, table_schema):
-    '''Return the set of column names we need to include in the SELECT.
+def desired_columns(selected, table_schema) -> Set:
+    """
+    Return the set of column names we need to include in the SELECT.
 
     selected - set of column names marked as selected in the input catalog
     table_schema - the most recently discovered Schema for the table
-    '''
+    """
     all_columns = set()
     available = set()
     automatic = set()
@@ -306,7 +395,7 @@ def desired_columns(selected, table_schema):
         elif inclusion == 'unsupported':
             unsupported.add(column)
         else:
-            raise Exception('Unknown inclusion ' + inclusion)
+            raise Exception(f'Unknown inclusion {inclusion}')
 
     selected_but_unsupported = selected.intersection(unsupported)
     if selected_but_unsupported:
