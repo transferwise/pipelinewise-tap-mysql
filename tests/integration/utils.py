@@ -5,7 +5,7 @@ import tap_mysql
 import tap_mysql.sync_strategies.common as common
 from tap_mysql.connection import MySQLConnection
 
-DB_NAME='tap_mysql_test'
+DB_NAME = 'tap_mysql_test'
 
 
 def get_db_config():

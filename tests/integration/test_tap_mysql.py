@@ -10,7 +10,7 @@ import tap_mysql.discover_utils
 from tap_mysql.connection import connect_with_backoff, MySQLConnection
 
 try:
-    import tests.utils as test_utils
+    import tests.integration.utils as test_utils
 except ImportError:
     import utils as test_utils
 
@@ -31,6 +31,9 @@ singer.write_message = accumulate_singer_messages
 
 class TestTypeMapping(unittest.TestCase):
 
+    def setUp(self) -> None:
+        self.maxDiff = None
+
     @classmethod
     def setUpClass(cls):
         conn = test_utils.get_test_connection()
@@ -47,6 +50,7 @@ class TestTypeMapping(unittest.TestCase):
                 c_tinyint_1 TINYINT(1),
                 c_tinyint_1_unsigned TINYINT(1) UNSIGNED,
                 c_smallint SMALLINT,
+                c_tinytext TINYTEXT,
                 c_mediumint MEDIUMINT,
                 c_int INT,
                 c_bigint BIGINT,
@@ -64,7 +68,8 @@ class TestTypeMapping(unittest.TestCase):
                 c_multipoint MULTIPOINT,
                 c_multilinestring MULTILINESTRING,
                 c_multipolygon MULTIPOLYGON,
-                c_geometrycollection GEOMETRYCOLLECTION
+                c_geometrycollection GEOMETRYCOLLECTION,
+                c_blob BLOB
                 )''')
 
         catalog = test_utils.discover_catalog(conn, {})
@@ -427,10 +432,10 @@ def message_types_and_versions(messages):
     versions = []
     for message in messages:
         t = type(message)
-        if t in set([singer.RecordMessage, singer.ActivateVersionMessage]):
+        if t in {singer.RecordMessage, singer.ActivateVersionMessage}:
             message_types.append(t.__name__)
             versions.append(message.version)
-    return (message_types, versions)
+    return message_types, versions
 
 
 class TestStreamVersionFullTable(unittest.TestCase):
@@ -713,7 +718,7 @@ class TestBinlogReplication(unittest.TestCase):
                  'metadata': {
                      'selected': True,
                      'database-name': 'tap_mysql_test',
-                     'table-key-propertes': ['id']
+                     'table-key-properties': ['id']
                 }},
                 {'breadcrumb': ('properties', 'id'), 'metadata': {'selected': True}},
                 {'breadcrumb': ('properties', 'updated'), 'metadata': {'selected': True}}
@@ -790,10 +795,8 @@ class TestBinlogReplication(unittest.TestCase):
 
         state = {}
 
-        failed = False
-        exception_message = None
-        expected_exception_message = "Unable to replicate stream(tap_mysql_test-{}) with binlog because it is a view.".format(
-            self.catalog.streams[0].stream)
+        expected_exception_message = "Unable to replicate stream(tap_mysql_test-{}) with binlog because it is a view.".\
+            format(self.catalog.streams[0].stream)
 
         with self.assertRaises(Exception) as context:
             tap_mysql.do_sync(self.conn, {}, self.catalog, state)
@@ -1256,9 +1259,9 @@ class TestBitBooleanMapping(unittest.TestCase):
             with open_conn.cursor() as cursor:
                 cursor.execute("CREATE TABLE bit_booleans_table(`id` int, `c_bit` BIT(4))")
                 cursor.execute("INSERT INTO bit_booleans_table(`id`,`c_bit`) VALUES "
-                    "(1, b'0000'),"
-                    "(2, NULL),"
-                    "(3, b'0010')")
+                               "(1, b'0000'),"
+                               "(2, NULL),"
+                               "(3, b'0010')")
 
         self.catalog = test_utils.discover_catalog(self.conn, {})
 
@@ -1287,7 +1290,7 @@ class TestBitBooleanMapping(unittest.TestCase):
                 cursor.execute('DROP TABLE bit_booleans_table;')
 
 
-if __name__ == "__main__":
-    test1 = TestBinlogReplication()
-    test1.setUp()
-    test1.test_binlog_stream()
+# if __name__ == "__main__":
+#     test1 = TestBinlogReplication()
+#     test1.setUp()
+#     test1.test_binlog_stream()
