@@ -4,7 +4,7 @@ references:
   container_config: &container_config
     docker:
       # Main Python container
-      - image: circleci/python:3.6.2
+      - image: circleci/python:3.8
         environment:
           TAP_MYSQL_PORT: 3306
           TAP_MYSQL_USER: root
@@ -32,19 +32,27 @@ jobs:
           command: |
             python3 -m venv ./virtualenvs/tap-mysql
             . ./virtualenvs/tap-mysql/bin/activate
-            pip3 install --upgrade pip
+            pip3 install --upgrade pip wheel setuptools
             pip3 install -e .[test]
       - run:
           name: 'Pylinting'
           command: |
             . ./virtualenvs/tap-mysql/bin/activate
             pylint --rcfile .pylintrc tap_mysql/
+
       - run:
-          name: 'Tests'
+          name: 'Unit Tests'
+          command: |
+            . ./virtualenvs/tap-mysql/bin/activate
+            nosetests -c .noserc --cover-min-percentage=35 tests/unit
+
+      - run:
+          name: 'Integration Tests'
           command: |
             . ./virtualenvs/tap-mysql/bin/activate
             export LOGGING_CONF_FILE=./sample_logging.conf
-            nosetests -c .noserc tests
+            nosetests -c .noserc --cover-min-percentage=87 tests/integration
+
 
 workflows:
   version: 2
