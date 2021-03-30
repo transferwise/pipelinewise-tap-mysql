@@ -5,29 +5,28 @@ import copy
 import datetime
 import json
 import re
-
 import pymysql.connections
 import pymysql.err
 import pytz
 import singer
 import tzlocal
 
-from typing import Dict
+from typing import Dict, Set, Union, Optional, Any
 from plpygis import Geometry
 from pymysqlreplication import BinLogStreamReader
 from pymysqlreplication.constants import FIELD_TYPE
 from pymysqlreplication.event import RotateEvent
+import tap_mysql.sync_strategies.common as common
 from pymysqlreplication.row_event import (
     DeleteRowsEvent,
     UpdateRowsEvent,
     WriteRowsEvent,
 )
-from singer import utils, Schema
 
-import tap_mysql.sync_strategies.common as common
+from singer import utils, Schema, metadata
 from tap_mysql.stream_utils import write_schema_message
-from tap_mysql.discover_utils import discover_catalog, desired_columns
-from tap_mysql.connection import connect_with_backoff, make_connection_wrapper
+from tap_mysql.discover_utils import discover_catalog, desired_columns, should_run_discovery
+from tap_mysql.connection import connect_with_backoff, make_connection_wrapper, MySQLConnection
 
 LOGGER = singer.get_logger('tap_mysql')
 
@@ -71,7 +70,7 @@ def verify_binlog_config(mysql_conn):
                 if ex.args[0] == 1193:
                     raise Exception("Unable to replicate binlog stream because binlog_row_image "
                                     "system variable does not exist. MySQL version must be at "
-                                    "least 5.6.2 to use binlog replication.")
+                                    "least 5.6.2 to use binlog replication.") from ex
                 raise ex
 
             if binlog_row_image != 'FULL':
@@ -128,12 +127,9 @@ def json_bytes_to_string(data):
     if isinstance(data, list):   return list(map(json_bytes_to_string, data))
     return data
 
-
+# pylint: disable=too-many-locals
 def row_to_singer_record(catalog_entry, version, db_column_map, row, time_extracted):
     row_to_persist = {}
-
-    LOGGER.debug('Schema properties: %s',catalog_entry.schema.properties)
-    LOGGER.debug('Event columns: %s', db_column_map)
 
     for column_name, val in row.items():
         property_type = catalog_entry.schema.properties[column_name].type
@@ -318,7 +314,8 @@ def handle_delete_rows_event(event, catalog_entry, state, columns, rows_saved, t
     db_column_types = get_db_column_types(event)
 
     for row in event.rows:
-        event_ts = datetime.datetime.utcfromtimestamp(event.timestamp).replace(tzinfo=pytz.UTC)
+        event_ts = datetime.datetime.utcfromtimestamp(event.timestamp) \
+            .replace(tzinfo=pytz.UTC).isoformat()
 
         vals = row['values']
         vals[SDC_DELETED_AT] = event_ts
@@ -354,20 +351,58 @@ def generate_streams_map(binlog_streams):
     return stream_map
 
 
-def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config: Dict):
+def __get_diff_in_columns_list(
+        binlog_event: Union[WriteRowsEvent, UpdateRowsEvent, DeleteRowsEvent],
+        schema_properties: Set[str],
+        ignore_columns: Optional[Set[str]] = None) -> Set[str]:
+    """
+    Compare event's columns to the schema properties and get the difference
+
+    Args:
+        binlog_event: Row type binlog event
+        schema_properties: stream known and supported schema properties
+        ignore_columns: an optional set of binlog event columns to ignore and not include in the diff
+
+    Returns: Difference as a set of column names
+
+    """
+
+    if ignore_columns is None:
+        ignore_columns = set()
+
+    # if a column no longer exists, the event will have something like __dropped_col_XY__
+    # to refer to this column, we don't want these columns to be included in the difference
+    # we also will ignore any column using the given ignore_columns argument.
+    binlog_columns_filtered = filter(
+        lambda col_name, ignored_cols=ignore_columns:
+        not bool(re.match(r'__dropped_col_\d+__', col_name) or col_name in ignored_cols),
+        [col.name for col in binlog_event.columns])
+
+    return set(binlog_columns_filtered).difference(schema_properties)
+
+# pylint: disable=R1702,R0915
+def _run_binlog_sync(
+        mysql_conn: MySQLConnection,
+        reader: BinLogStreamReader,
+        binlog_streams_map: Dict,
+        state: Dict,
+        config: Dict,
+        end_log_file: str,
+        end_log_pos: int):
     time_extracted = utils.now()
 
     rows_saved = 0
     events_skipped = 0
 
-    end_log_file, end_log_pos = fetch_current_log_file_and_pos(mysql_conn)
-    LOGGER.info('Current Master binlog file and pos: %s %s', end_log_file, end_log_pos)
-
     log_file = None
     log_pos = None
 
-    # Exit from the loop when the reader either runs out of streams to return or we reach the end position (which is
-    # is Master's)
+    # A set to hold all columns that are detected as we sync but should be ignored cuz they are unsupported types.
+    # Saving them here to avoid doing the check if we should ignore a column over and over again
+    ignored_columns = set()
+
+    # Exit from the loop when the reader either runs out of streams to return or we reach
+    # the end position (which is Master's)
     for binlog_event in reader:
 
         # get reader current binlog file and position
@@ -403,61 +438,68 @@ def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config: Dict
             columns = streams_map_entry.get('desired_columns')
 
             if not catalog_entry:
-                events_skipped = events_skipped + 1
+                events_skipped += 1
 
                 if events_skipped % UPDATE_BOOKMARK_PERIOD == 0:
                     LOGGER.debug("Skipped %s events so far as they were not for selected tables; %s rows extracted",
                                  events_skipped,
                                  rows_saved)
-
             else:
-
                 # Compare event's columns to the schema properties
-                # if a column no longer exists, the event will have something like __dropped_col_XY__
-                # to refer to this column, we don't want these columns to be included in the difference
-                diff = set(filter(lambda k: False if re.match(r'__dropped_col_\d+__', k) else True,
-                                  get_db_column_types(binlog_event).keys())). \
-                    difference(catalog_entry.schema.properties.keys())
+                diff = __get_diff_in_columns_list(binlog_event,
+                                                  catalog_entry.schema.properties.keys(),
+                                                  ignored_columns)
 
-                # If there are additional cols in the event then run discovery and update the catalog
+                # If there are additional cols in the event then run discovery if needed and update the catalog
                 if diff:
-                    LOGGER.debug('Difference between event and schema: %s', diff)
-                    LOGGER.info('Running discovery ... ')
 
-                    # run discovery for the current table only
-                    new_catalog_entry = discover_catalog(mysql_conn,
-                                                         config.get('filter_dbs'),
-                                                         catalog_entry.table).streams[0]
+                    LOGGER.info('Stream `%s`: Difference detected between event and schema: %s', tap_stream_id, diff)
 
-                    selected = {k for k, v in new_catalog_entry.schema.properties.items()
-                                if common.property_is_selected(new_catalog_entry, k)}
+                    md_map = metadata.to_map(catalog_entry.metadata)
 
-                    # the new catalog has "stream" property = table name, we need to update that to make it the same as
-                    # the result of the "resolve_catalog" function
-                    new_catalog_entry.stream = tap_stream_id
+                    if not should_run_discovery(diff, md_map):
+                        LOGGER.info('Stream `%s`: Not running discovery. Ignoring all detected columns in %s',
+                                    tap_stream_id,
+                                    diff)
+                        ignored_columns = ignored_columns.union(diff)
 
-                    # These are the columns we need to select
-                    new_columns = desired_columns(selected, new_catalog_entry.schema)
+                    else:
+                        LOGGER.info('Stream `%s`: Running discovery ... ', tap_stream_id)
 
-                    cols = set(new_catalog_entry.schema.properties.keys())
+                        # run discovery for the current table only
+                        new_catalog_entry = discover_catalog(mysql_conn,
+                                                             config.get('filter_dbs'),
+                                                             catalog_entry.table).streams[0]
 
-                    # drop unsupported properties from schema
-                    for col in cols:
-                        if col not in new_columns:
-                            new_catalog_entry.schema.properties.pop(col, None)
+                        selected = {k for k, v in new_catalog_entry.schema.properties.items()
+                                    if common.property_is_selected(new_catalog_entry, k)}
 
-                    # Add the _sdc_deleted_at col
-                    new_columns = add_automatic_properties(new_catalog_entry, list(new_columns))
+                        # the new catalog has "stream" property = table name, we need to update that to make it the
+                        # same as the result of the "resolve_catalog" function
+                        new_catalog_entry.stream = tap_stream_id
 
-                    # send the new scheme to target if we have a new schema
-                    if new_catalog_entry.schema.properties != catalog_entry.schema.properties:
-                        write_schema_message(catalog_entry=new_catalog_entry)
-                        catalog_entry = new_catalog_entry
+                        # These are the columns we need to select
+                        new_columns = desired_columns(selected, new_catalog_entry.schema)
 
-                        # update this dictionary while we're at it
-                        binlog_streams_map[tap_stream_id]['catalog_entry'] = new_catalog_entry
-                        binlog_streams_map[tap_stream_id]['desired_columns'] = new_columns
-                        columns = new_columns
+                        cols = set(new_catalog_entry.schema.properties.keys())
+
+                        # drop unsupported properties from schema
+                        for col in cols:
+                            if col not in new_columns:
+                                new_catalog_entry.schema.properties.pop(col, None)
+
+                        # Add the _sdc_deleted_at col
+                        new_columns = add_automatic_properties(new_catalog_entry, list(new_columns))
+
+                        # send the new scheme to target if we have a new schema
+                        if new_catalog_entry.schema.properties != catalog_entry.schema.properties:
+                            write_schema_message(catalog_entry=new_catalog_entry)
+                            catalog_entry = new_catalog_entry
+
+                            # update this dictionary while we're at it
+                            binlog_streams_map[tap_stream_id]['catalog_entry'] = new_catalog_entry
+                            binlog_streams_map[tap_stream_id]['desired_columns'] = new_columns
+                            columns = new_columns
 
                 if isinstance(binlog_event, WriteRowsEvent):
                     rows_saved = handle_write_rows_event(binlog_event,
@@ -506,20 +548,22 @@ def _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config: Dict
                                  log_pos)
 
 
-def sync_binlog_stream(mysql_conn, config, binlog_streams, state) -> None:
+def sync_binlog_stream(
+        mysql_conn: MySQLConnection,
+        config: Dict,
+        binlog_streams_map: Dict[str, Any],
+        state: Dict) -> None:
     """
     Capture the binlog events created between the pos in the state and current Master position and creates Singer
     streams to be flushed to stdout
     Args:
         mysql_conn: mysql connection instance
         config: tap config
-        binlog_streams: tables to stream using binlog
+        binlog_streams_map: tables to stream using binlog
         state: the current state
-
     """
-    binlog_streams_map = generate_streams_map(binlog_streams)
 
-    for tap_stream_id, _ in binlog_streams_map.items():
+    for tap_stream_id in binlog_streams_map:
         common.whitelist_bookmark_keys(BOOKMARK_KEYS, tap_stream_id, state)
 
     log_file, log_pos = calculate_bookmark(mysql_conn, binlog_streams_map, state)
@@ -549,7 +593,10 @@ def sync_binlog_stream(mysql_conn, config, binlog_streams, state) -> None:
 
         LOGGER.info("Starting binlog replication with log_file=%s, log_pos=%s", log_file, log_pos)
 
-        _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config)
+        end_log_file, end_log_pos = fetch_current_log_file_and_pos(mysql_conn)
+        LOGGER.info('Current Master binlog file and pos: %s %s', end_log_file, end_log_pos)
+
+        _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config, end_log_file, end_log_pos)
 
     finally:
         # BinLogStreamReader doesn't implement the `with` methods
