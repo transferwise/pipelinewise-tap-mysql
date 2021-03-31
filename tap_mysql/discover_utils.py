@@ -92,7 +92,7 @@ def is_supported_column_type(column_sql_type: str) -> bool:
         # fetch only the substring from start till the parentheses
         truncated_sql_type = column_sql_type[:idx].lower()
 
-    # The above should process should never result in an empty string
+    # The above process should never result in an empty string
     # so to err on the safe side, let's raise an exception in case that ever happens
     if not truncated_sql_type:
         raise Exception(
