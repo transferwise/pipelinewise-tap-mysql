@@ -5,7 +5,7 @@ import itertools
 import pendulum
 import pymysql
 
-from typing import Optional, Dict, Tuple, Set
+from typing import Optional, Dict, Tuple, Set, List
 from singer import metadata, Schema, get_logger
 from singer.catalog import Catalog, CatalogEntry
 
@@ -71,34 +71,16 @@ SUPPORTED_COLUMN_TYPES_AGGREGATED = \
         .union(BYTES_FOR_INTEGER_TYPE.keys())
 
 
-def is_supported_column_type(column_sql_type: str) -> bool:
+def is_supported_column_type(column_datatype: str) -> bool:
     """
-    Checks if the given sql type is supported
+    Checks if the given sql datatype is supported
 
     Args:
-        column_sql_type: Column sql data type from the catalog metadata
-            could be in the format {TYPE}(size) or {TYPE}, e.g bigint(100), timestamp ..etc
+        column_datatype: Column sql data type from the catalog metadata
 
     Returns: True if column type is supported, False otherwise
     """
-    try:
-        # handle types where the size is included such as varchar(10)
-        # get the index of the parentheses to use later
-        idx = column_sql_type.index('(')
-    except ValueError:
-        # if type has no size then we can use it as it
-        truncated_sql_type = column_sql_type.lower()
-    else:
-        # fetch only the substring from start till the parentheses
-        truncated_sql_type = column_sql_type[:idx].lower()
-
-    # The above process should never result in an empty string
-    # so to err on the safe side, let's raise an exception in case that ever happens
-    if not truncated_sql_type:
-        raise Exception(
-            f'Something went wrong! Processing type `{column_sql_type}` results in empty value `{truncated_sql_type}`')
-
-    return truncated_sql_type in SUPPORTED_COLUMN_TYPES_AGGREGATED
+    return column_datatype in SUPPORTED_COLUMN_TYPES_AGGREGATED
 
 
 def should_run_discovery(column_names: Set[str], md_map: Dict[Tuple, Dict]) -> bool:
@@ -131,7 +113,7 @@ def should_run_discovery(column_names: Set[str], md_map: Dict[Tuple, Dict]) -> b
             LOGGER.debug('Will run discovery because `%s` not in stream metadata', column_name)
             return True
 
-        if md_properties['selected-by-default'] and is_supported_column_type(md_properties['sql-datatype']):
+        if md_properties['selected-by-default'] and is_supported_column_type(md_properties['datatype']):
             LOGGER.debug('Will run discovery because `%s` is selected by default and of supported type', column_name)
             return True
 
@@ -318,19 +300,24 @@ def schema_for_column(column):  # pylint: disable=too-many-branches
     return result
 
 
-def create_column_metadata(cols):
+def create_column_metadata(cols: List[Column]):
     mdata = {}
     mdata = metadata.write(mdata, (), 'selected-by-default', False)
     for col in cols:
         schema = schema_for_column(col)
         mdata = metadata.write(mdata,
                                ('properties', col.column_name),
-                               'selected-by-default',
-                               schema.inclusion != 'unsupported')
+                               'selected-by-default', schema.inclusion != 'unsupported')
+
         mdata = metadata.write(mdata,
                                ('properties', col.column_name),
-                               'sql-datatype',
-                               col.column_type.lower())
+                               'sql-datatype', col.column_type.lower())
+
+
+        mdata = metadata.write(mdata,
+                               ('properties', col.column_name),
+                               'datatype', col.data_type.lower()
+                               )
 
     return metadata.to_list(mdata)
 
