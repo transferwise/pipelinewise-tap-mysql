@@ -92,9 +92,9 @@ def binlog_stream_requires_historical(catalog_entry, state):
     return True
 
 
-
 def get_non_binlog_streams(mysql_conn, catalog, config, state):
-    '''Returns the Catalog of data we're going to sync for all SELECT-based
+    """
+    Returns the Catalog of data we're going to sync for all SELECT-based
     streams (i.e. INCREMENTAL, FULL_TABLE, and LOG_BASED that require a historical
     sync). LOG_BASED streams that require a historical sync are inferred from lack
     of any state.
@@ -106,13 +106,13 @@ def get_non_binlog_streams(mysql_conn, catalog, config, state):
 
     The resulting Catalog will include the following any streams marked as
     "selected" that currently exist in the database. Columns marked as "selected"
-    and those labled "automatic" (e.g. primary keys and replication keys) will be
+    and those labeled "automatic" (e.g. primary keys and replication keys) will be
     included. Streams will be prioritized in the following order:
       1. currently_syncing if it is SELECT-based
       2. any streams that do not have state
       3. any streams that do not have a replication method of LOG_BASED
 
-    '''
+    """
     discovered = discover_catalog(mysql_conn, config.get('filter_dbs'))
 
     # Filter catalog to include only selected streams
@@ -180,7 +180,6 @@ def get_binlog_streams(mysql_conn, catalog, config, state):
             binlog_streams.append(stream)
 
     return resolve_catalog(discovered, binlog_streams)
-
 
 
 def do_sync_incremental(mysql_conn, catalog_entry, state, columns):
@@ -330,12 +329,14 @@ def sync_non_binlog_streams(mysql_conn, non_binlog_catalog, state):
 
 
 def sync_binlog_streams(mysql_conn, binlog_catalog, config, state):
+
     if binlog_catalog.streams:
         for stream in binlog_catalog.streams:
             write_schema_message(stream)
 
         with metrics.job_timer('sync_binlog'):
-            binlog.sync_binlog_stream(mysql_conn, config, binlog_catalog.streams, state)
+            binlog_streams_map = binlog.generate_streams_map(binlog_catalog.streams)
+            binlog.sync_binlog_stream(mysql_conn, config, binlog_streams_map, state)
 
 
 def do_sync(mysql_conn, config, catalog, state):
