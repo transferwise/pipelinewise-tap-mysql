@@ -2,6 +2,7 @@
 ------------------
 * Fix in LOG_BASED method: re-discovery constantly running when table has unsupported column type.
 * Add support for tinytext column type
+* Bump `pendulum` to 1.5.1
 * Add unit tests and re-arrange tests folder
 
 1.4.2 (2021-03-15)
