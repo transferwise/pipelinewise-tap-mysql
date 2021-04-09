@@ -86,7 +86,8 @@ class TestTypeMapping(unittest.TestCase):
                                 multipleOf=1))
         self.assertEqual(self.get_metadata_for_column('c_decimal'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'decimal(10,0)'})
+                          'sql-datatype': 'decimal(10,0)',
+                          'datatype': 'decimal'})
 
     def test_decimal_unsigned(self):
         self.assertEqual(self.schema.properties['c_decimal_2_unsigned'],
@@ -95,7 +96,8 @@ class TestTypeMapping(unittest.TestCase):
                                 multipleOf=0.01))
         self.assertEqual(self.get_metadata_for_column('c_decimal_2_unsigned'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'decimal(5,2) unsigned'})
+                          'sql-datatype': 'decimal(5,2) unsigned',
+                          'datatype': 'decimal'})
 
     def test_decimal_with_defined_scale_and_precision(self):
         self.assertEqual(self.schema.properties['c_decimal_2'],
@@ -104,7 +106,8 @@ class TestTypeMapping(unittest.TestCase):
                                 multipleOf=0.01))
         self.assertEqual(self.get_metadata_for_column('c_decimal_2'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'decimal(11,2)'})
+                          'sql-datatype': 'decimal(11,2)',
+                          'datatype': 'decimal'})
 
     def test_tinyint(self):
         self.assertEqual(self.schema.properties['c_tinyint'],
@@ -114,7 +117,8 @@ class TestTypeMapping(unittest.TestCase):
                                 maximum=127))
         self.assertEqual(self.get_metadata_for_column('c_tinyint'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'tinyint(4)'})
+                          'sql-datatype': 'tinyint(4)',
+                          'datatype': 'tinyint'})
 
     def test_tinyint_1(self):
         self.assertEqual(self.schema.properties['c_tinyint_1'],
@@ -122,7 +126,8 @@ class TestTypeMapping(unittest.TestCase):
                                 inclusion='available'))
         self.assertEqual(self.get_metadata_for_column('c_tinyint_1'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'tinyint(1)'})
+                          'sql-datatype': 'tinyint(1)',
+                          'datatype': 'tinyint'})
 
     def test_tinyint_1_unsigned(self):
         self.assertEqual(self.schema.properties['c_tinyint_1_unsigned'],
@@ -130,7 +135,8 @@ class TestTypeMapping(unittest.TestCase):
                                 inclusion='available'))
         self.assertEqual(self.get_metadata_for_column('c_tinyint_1_unsigned'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'tinyint(1) unsigned'})
+                          'sql-datatype': 'tinyint(1) unsigned',
+                          'datatype': 'tinyint'})
 
     def test_smallint(self):
         self.assertEqual(self.schema.properties['c_smallint'],
@@ -140,7 +146,8 @@ class TestTypeMapping(unittest.TestCase):
                                 maximum=32767))
         self.assertEqual(self.get_metadata_for_column('c_smallint'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'smallint(6)'})
+                          'sql-datatype': 'smallint(6)',
+                          'datatype': 'smallint'})
 
     def test_mediumint(self):
         self.assertEqual(self.schema.properties['c_mediumint'],
@@ -150,7 +157,8 @@ class TestTypeMapping(unittest.TestCase):
                                 maximum=8388607))
         self.assertEqual(self.get_metadata_for_column('c_mediumint'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'mediumint(9)'})
+                          'sql-datatype': 'mediumint(9)',
+                          'datatype': 'mediumint'})
 
     def test_int(self):
         self.assertEqual(self.schema.properties['c_int'],
@@ -160,7 +168,8 @@ class TestTypeMapping(unittest.TestCase):
                                 maximum=2147483647))
         self.assertEqual(self.get_metadata_for_column('c_int'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'int(11)'})
+                          'sql-datatype': 'int(11)',
+                          'datatype': 'int'})
 
     def test_bigint(self):
         self.assertEqual(self.schema.properties['c_bigint'],
@@ -170,7 +179,8 @@ class TestTypeMapping(unittest.TestCase):
                                 maximum=9223372036854775807))
         self.assertEqual(self.get_metadata_for_column('c_bigint'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'bigint(20)'})
+                          'sql-datatype': 'bigint(20)',
+                          'datatype': 'bigint'})
 
     def test_bigint_unsigned(self):
         self.assertEqual(self.schema.properties['c_bigint_unsigned'],
@@ -181,7 +191,8 @@ class TestTypeMapping(unittest.TestCase):
 
         self.assertEqual(self.get_metadata_for_column('c_bigint_unsigned'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'bigint(20) unsigned'})
+                          'sql-datatype': 'bigint(20) unsigned',
+                          'datatype': 'bigint'})
 
     def test_float(self):
         self.assertEqual(self.schema.properties['c_float'],
@@ -189,7 +200,8 @@ class TestTypeMapping(unittest.TestCase):
                                 inclusion='available'))
         self.assertEqual(self.get_metadata_for_column('c_float'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'float'})
+                          'sql-datatype': 'float',
+                          'datatype': 'float'})
 
     def test_double(self):
         self.assertEqual(self.schema.properties['c_double'],
@@ -197,7 +209,8 @@ class TestTypeMapping(unittest.TestCase):
                                 inclusion='available'))
         self.assertEqual(self.get_metadata_for_column('c_double'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'double'})
+                          'sql-datatype': 'double',
+                          'datatype': 'double'})
 
     def test_bit(self):
         self.assertEqual(self.schema.properties['c_bit'],
@@ -205,7 +218,8 @@ class TestTypeMapping(unittest.TestCase):
                                 inclusion='available'))
         self.assertEqual(self.get_metadata_for_column('c_bit'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'bit(4)'})
+                          'sql-datatype': 'bit(4)',
+                          'datatype': 'bit'})
 
     def test_date(self):
         self.assertEqual(self.schema.properties['c_date'],
@@ -214,7 +228,8 @@ class TestTypeMapping(unittest.TestCase):
                                 inclusion='available'))
         self.assertEqual(self.get_metadata_for_column('c_date'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'date'})
+                          'sql-datatype': 'date',
+                          'datatype': 'date'})
 
     def test_time(self):
         self.assertEqual(self.schema.properties['c_time'],
@@ -223,14 +238,16 @@ class TestTypeMapping(unittest.TestCase):
                                 inclusion='available'))
         self.assertEqual(self.get_metadata_for_column('c_time'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'time'})
+                          'sql-datatype': 'time',
+                          'datatype': 'time'})
 
     def test_year(self):
         self.assertEqual(self.schema.properties['c_year'].inclusion,
                          'unsupported')
         self.assertEqual(self.get_metadata_for_column('c_year'),
                          {'selected-by-default': False,
-                          'sql-datatype': 'year(4)'})
+                          'sql-datatype': 'year(4)',
+                          'datatype': 'year'})
 
     def test_pk(self):
         self.assertEqual(
@@ -244,7 +261,8 @@ class TestTypeMapping(unittest.TestCase):
                                 inclusion='available'))
         self.assertEqual(self.get_metadata_for_column('c_geometry'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'geometry'})
+                          'sql-datatype': 'geometry',
+                          'datatype': 'geometry'})
 
     def test_point(self):
         self.assertEqual(self.schema.properties['c_point'],
@@ -253,7 +271,8 @@ class TestTypeMapping(unittest.TestCase):
                                 inclusion='available'))
         self.assertEqual(self.get_metadata_for_column('c_point'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'point'})
+                          'sql-datatype': 'point',
+                          'datatype': 'point'})
 
     def test_linestring(self):
         self.assertEqual(self.schema.properties['c_linestring'],
@@ -262,7 +281,8 @@ class TestTypeMapping(unittest.TestCase):
                                 inclusion='available'))
         self.assertEqual(self.get_metadata_for_column('c_linestring'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'linestring'})
+                          'sql-datatype': 'linestring',
+                          'datatype': 'linestring'})
 
     def test_polygon(self):
         self.assertEqual(self.schema.properties['c_polygon'],
@@ -271,7 +291,8 @@ class TestTypeMapping(unittest.TestCase):
                                 inclusion='available'))
         self.assertEqual(self.get_metadata_for_column('c_polygon'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'polygon'})
+                          'sql-datatype': 'polygon',
+                          'datatype': 'polygon'})
 
     def test_multipoint(self):
         self.assertEqual(self.schema.properties['c_multipoint'],
@@ -280,7 +301,8 @@ class TestTypeMapping(unittest.TestCase):
                                 inclusion='available'))
         self.assertEqual(self.get_metadata_for_column('c_multipoint'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'multipoint'})
+                          'sql-datatype': 'multipoint',
+                          'datatype': 'multipoint'})
 
     def test_multilinestring(self):
         self.assertEqual(self.schema.properties['c_multilinestring'],
@@ -289,7 +311,8 @@ class TestTypeMapping(unittest.TestCase):
                                 inclusion='available'))
         self.assertEqual(self.get_metadata_for_column('c_multilinestring'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'multilinestring'})
+                          'sql-datatype': 'multilinestring',
+                          'datatype': 'multilinestring'})
 
     def test_multipolygon(self):
         self.assertEqual(self.schema.properties['c_multipolygon'],
@@ -298,7 +321,8 @@ class TestTypeMapping(unittest.TestCase):
                                 inclusion='available'))
         self.assertEqual(self.get_metadata_for_column('c_multipolygon'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'multipolygon'})
+                          'sql-datatype': 'multipolygon',
+                          'datatype': 'multipolygon'})
 
     def test_geometrycollection(self):
         self.assertEqual(self.schema.properties['c_geometrycollection'],
@@ -307,7 +331,8 @@ class TestTypeMapping(unittest.TestCase):
                                 inclusion='available'))
         self.assertEqual(self.get_metadata_for_column('c_geometrycollection'),
                          {'selected-by-default': True,
-                          'sql-datatype': 'geometrycollection'})
+                          'sql-datatype': 'geometrycollection',
+                          'datatype': 'geometrycollection'})
 
 
 class TestSelectsAppropriateColumns(unittest.TestCase):

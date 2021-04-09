@@ -313,10 +313,10 @@ def handle_delete_rows_event(event, catalog_entry, state, columns, rows_saved, t
     stream_version = common.get_stream_version(catalog_entry.tap_stream_id, state)
     db_column_types = get_db_column_types(event)
 
-    for row in event.rows:
-        event_ts = datetime.datetime.utcfromtimestamp(event.timestamp) \
-            .replace(tzinfo=pytz.UTC).isoformat()
+    event_ts = datetime.datetime.utcfromtimestamp(event.timestamp) \
+        .replace(tzinfo=pytz.UTC).isoformat()
 
+    for row in event.rows:
         vals = row['values']
         vals[SDC_DELETED_AT] = event_ts
 
