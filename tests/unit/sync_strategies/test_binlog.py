@@ -1,11 +1,11 @@
 import datetime
 import pytz
+import os
 
 from collections import namedtuple
 from typing import Dict
 from unittest import TestCase
 from unittest.mock import patch, Mock, call
-
 from pymysqlreplication.constants import FIELD_TYPE
 from pymysqlreplication.event import RotateEvent
 from pymysqlreplication.row_event import WriteRowsEvent, UpdateRowsEvent, DeleteRowsEvent
@@ -70,6 +70,10 @@ class TestBinlogSyncStrategy(TestCase):
                                   discover_catalog_mock,
                                   *args):
 
+        # we're dealing with local datetimes, so tests passing depend on the local timezone
+        # pin the TZ to EET to avoid flakiness
+        os.environ['TZ'] = 'EET'
+
         config = {
             'server_id': '123'
         }
@@ -105,28 +109,32 @@ class TestBinlogSyncStrategy(TestCase):
                             'breadcrumb': ['properties', 'c_int'],
                             'metadata': {
                                 'selected-by-default': True,
-                                'sql-datatype': 'int(11)'
+                                'sql-datatype': 'int(11)',
+                                'datatype': 'int'
                             }
                         },
                         {
                             'breadcrumb': ['properties', 'c_varchar'],
                             'metadata': {
                                 'selected-by-default': True,
-                                'sql-datatype': 'varchar(100)'
+                                'sql-datatype': 'varchar(100)',
+                                'datatype': 'varchar'
                             }
                         },
                         {
                             'breadcrumb': ['properties', 'c_blob'],
                             'metadata': {
                                 'selected-by-default': False,
-                                'sql-datatype': 'blob'
+                                'sql-datatype': 'blob',
+                                'datatype': 'blob'
                             }
                         },
                         {
                             'breadcrumb': ['properties', 'c_timestamp'],
                             'metadata': {
                                 'selected-by-default': True,
-                                'sql-datatype': 'timestamp'
+                                'sql-datatype': 'timestamp',
+                                'datatype': 'timestamp'
                             }
                         }
                     ]
@@ -493,35 +501,40 @@ class TestBinlogSyncStrategy(TestCase):
                                     'breadcrumb': ['properties', 'c_int'],
                                     'metadata': {
                                         'selected-by-default': True,
-                                        'sql-datatype': 'int(11)'
+                                        'sql-datatype': 'int(11)',
+                                        'datatype': 'int'
                                     }
                                 },
                                 {
                                     'breadcrumb': ['properties', 'c_varchar'],
                                     'metadata': {
                                         'selected-by-default': True,
-                                        'sql-datatype': 'varchar(100)'
+                                        'sql-datatype': 'varchar(100)',
+                                        'datatype': 'varchar'
                                     }
                                 },
                                 {
                                     'breadcrumb': ['properties', 'c_blob'],
                                     'metadata': {
                                         'selected-by-default': True,
-                                        'sql-datatype': 'blob'
+                                        'sql-datatype': 'blob',
+                                        'datatype': 'blob'
                                     }
                                 },
                                 {
                                     'breadcrumb': ['properties', 'c_tiny_blob'],
                                     'metadata': {
                                         'selected-by-default': False,
-                                        'sql-datatype': 'blob'
+                                        'sql-datatype': 'blob',
+                                        'datatype': 'blob'
                                     }
                                 },
                                 {
                                     'breadcrumb': ['properties', 'c_datetime'],
                                     'metadata': {
                                         'selected-by-default': True,
-                                        'sql-datatype': 'timestamp'
+                                        'sql-datatype': 'timestamp',
+                                        'datatype': 'timestamp'
                                     }
                                 }
                             ]
