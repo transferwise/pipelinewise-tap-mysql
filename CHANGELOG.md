@@ -1,3 +1,9 @@
+1.4.3 (2021-04-09)
+------------------
+* Fix in LOG_BASED method: re-discovery constantly running when table has unsupported column type.
+* Add support for tinytext column type
+* Add unit tests and re-arrange tests folder
+
 1.4.2 (2021-03-15)
 ------------------
 * Fix a typo
