@@ -3,15 +3,15 @@
 import copy
 import pymysql
 import singer
-import singer.metrics as metrics
+from singer import metrics
 
 from singer import metadata, get_logger
 from singer.catalog import Catalog
 
-import tap_mysql.sync_strategies.binlog as binlog
-import tap_mysql.sync_strategies.common as common
-import tap_mysql.sync_strategies.full_table as full_table
-import tap_mysql.sync_strategies.incremental as incremental
+from tap_mysql.sync_strategies import binlog
+from tap_mysql.sync_strategies import common
+from tap_mysql.sync_strategies import full_table
+from tap_mysql.sync_strategies import incremental
 
 from tap_mysql.connection import connect_with_backoff, MySQLConnection
 from tap_mysql.discover_utils import discover_catalog, resolve_catalog
