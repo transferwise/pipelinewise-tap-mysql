@@ -6,7 +6,7 @@ import tap_mysql
 from tap_mysql.connection import connect_with_backoff
 
 try:
-    import tests.utils as test_utils
+    import tests.integration.utils as test_utils
 except ImportError:
     import utils as test_utils
 
