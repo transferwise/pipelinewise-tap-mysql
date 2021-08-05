@@ -14,4 +14,4 @@ unit_test:
 
 integration_test:
 	. ./venv/bin/activate
-	nosetests -c .noserc --cover-min-percentage=86 tests/integration
+	nosetests -c .noserc --cover-min-percentage=87 tests/integration
