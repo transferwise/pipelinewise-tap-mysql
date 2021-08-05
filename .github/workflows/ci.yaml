@@ -49,9 +49,9 @@ jobs:
 
       - name: Integration Tests
         env:
-          TAP_POSTGRES_PORT: 5432
-          TAP_POSTGRES_USER: test_user
-          TAP_POSTGRES_PASSWORD: my-secret-passwd
-          TAP_POSTGRES_HOST: localhost
+          TAP_MYSQL_PORT: 5432
+          TAP_MYSQL_USER: test_user
+          TAP_MYSQL_PASSWORD: my-secret-passwd
+          TAP_MYSQL_HOST: localhost
           LOGGING_CONF_FILE: ./sample_logging.conf
         run: make integration_test
