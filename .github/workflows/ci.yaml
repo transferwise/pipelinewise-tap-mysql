@@ -15,22 +15,25 @@ jobs:
       matrix:
         python-version: [ 3.6, 3.7, 3.8 ]
 
-    services:
-      test_mysql:
-        image: mariadb:10.2
-        env:
-          MYSQL_ROOT_PASSWORD: my-secret-passwd
-          MYSQL_DATABASE: tap_mysql_test
-        ports:
-          - 3306:3306
-        options: >-
-          --default-authentication-plugin=mysql_native_password
-          --log-bin=mysql-bin
-          --binlog-format=ROW
+#    services:
+#      test_mysql:
+#        image: mariadb:10.2
+#        env:
+#          MYSQL_ROOT_PASSWORD: my-secret-passwd
+#          MYSQL_DATABASE: tap_mysql_test
+#        ports:
+#          - 3306:3306
+#        options: >-
+#          --default-authentication-plugin=mysql_native_password
+#          --log-bin=mysql-bin
+#          --binlog-format=ROW
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
+
+      - name: Build Mysql test container
+        run: docker-compose up -d --build test_mysql
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
@@ -54,3 +57,6 @@ jobs:
           TAP_MYSQL_HOST: localhost
           LOGGING_CONF_FILE: ./sample_logging.conf
         run: make integration_test
+
+      - name: Shutdown Mysql test container
+        run: docker-compose down
