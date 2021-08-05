@@ -15,19 +15,6 @@ jobs:
       matrix:
         python-version: [ 3.6, 3.7, 3.8 ]
 
-#    services:
-#      test_mysql:
-#        image: mariadb:10.2
-#        env:
-#          MYSQL_ROOT_PASSWORD: my-secret-passwd
-#          MYSQL_DATABASE: tap_mysql_test
-#        ports:
-#          - 3306:3306
-#        options: >-
-#          --default-authentication-plugin=mysql_native_password
-#          --log-bin=mysql-bin
-#          --binlog-format=ROW
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
