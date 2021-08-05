@@ -49,7 +49,7 @@ jobs:
 
       - name: Integration Tests
         env:
-          TAP_MYSQL_PORT: 5432
+          TAP_MYSQL_PORT: 3306
           TAP_MYSQL_USER: test_user
           TAP_MYSQL_PASSWORD: my-secret-passwd
           TAP_MYSQL_HOST: localhost
