@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - main
+
+jobs:
+  lint_and_test:
+    name: Linting and Testing
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [ 3.6, 3.7, 3.8 ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Build Mysql test container
+        run: docker-compose up -d --build test_mysql
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Setup virtual environment
+        run: make venv
+
+      - name: Pylinting
+        run: make pylint
+
+      - name: Unit Tests
+        run: make unit_test
+
+      - name: Integration Tests
+        env:
+          TAP_MYSQL_PORT: 3306
+          TAP_MYSQL_USER: root
+          TAP_MYSQL_PASSWORD: my-secret-passwd
+          TAP_MYSQL_HOST: localhost
+          LOGGING_CONF_FILE: ./sample_logging.conf
+        run: make integration_test
+
+      - name: Shutdown Mysql test container
+        run: docker-compose down
