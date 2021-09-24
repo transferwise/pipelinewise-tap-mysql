@@ -91,6 +91,7 @@ jobs:
         shell: bash
         run: |
           docker-compose up -d --build test_mysql
+          docker inspect --format "{{json .State.Running }}" test_mysql
           while [ $(docker inspect --format "{{json .State.Running }}" test_mysql) != "true" ]; do printf "."; sleep 1; done
 
       - name: Set up Python ${{ matrix.python-version }}
