@@ -26,7 +26,7 @@ jobs:
         run: make pylint
 
   unit_tests:
-    name: Linting
+    name: Unit tests
     runs-on: ubuntu-latest
     strategy:
       matrix:
