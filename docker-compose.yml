@@ -17,4 +17,8 @@ services:
       MYSQL_DATABASE: tap_mysql_test
     ports:
       - "3306:3307"
-    command: --default-authentication-plugin=mysql_native_password --log-bin=mysql-bin --binlog-format=ROW
+    command: |
+      --default-authentication-plugin=mysql_native_password
+      --log-bin=mysql-bin
+      --binlog-format=ROW
+      --health-cmd='mysqladmin ping --silent'
