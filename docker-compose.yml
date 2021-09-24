@@ -12,6 +12,7 @@ services:
 
   test_mysql:
     image: mysql:8
+    container_name: "test_mysql"
     environment:
       MYSQL_ROOT_PASSWORD: my-secret-passwd
       MYSQL_DATABASE: tap_mysql_test
