@@ -8,8 +8,76 @@ on:
       - main
 
 jobs:
-  lint_and_test:
-    name: Linting and Testing
+  lint:
+    name: Linting
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [ 3.6, 3.7, 3.8 ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup virtual environment
+        run: make venv
+
+      - name: Pylinting
+        run: make pylint
+
+  unit_tests:
+    name: Linting
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [ 3.6, 3.7, 3.8 ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup virtual environment
+        run: make venv
+
+      - name: Unit Tests
+        run: make unit_test
+
+  integration_tests_mariadb:
+    name: Integration tests with Mariadb
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [ 3.6, 3.7, 3.8 ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Build Mysql test container
+        run: docker-compose up -d --build test_mariadb
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Setup virtual environment
+        run: make venv
+
+      - name: Integration Tests
+        env:
+          TAP_MYSQL_PORT: 3306
+          TAP_MYSQL_USER: root
+          TAP_MYSQL_PASSWORD: my-secret-passwd
+          TAP_MYSQL_HOST: localhost
+          LOGGING_CONF_FILE: ./sample_logging.conf
+        run: make integration_test
+
+      - name: Shutdown test container
+        run: docker-compose down test_mariadb
+
+  integration_tests_mysql:
+    name: Integration tests with Mysql
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -30,20 +98,14 @@ jobs:
       - name: Setup virtual environment
         run: make venv
 
-      - name: Pylinting
-        run: make pylint
-
-      - name: Unit Tests
-        run: make unit_test
-
       - name: Integration Tests
         env:
-          TAP_MYSQL_PORT: 3306
+          TAP_MYSQL_PORT: 3307
           TAP_MYSQL_USER: root
           TAP_MYSQL_PASSWORD: my-secret-passwd
           TAP_MYSQL_HOST: localhost
           LOGGING_CONF_FILE: ./sample_logging.conf
         run: make integration_test
 
-      - name: Shutdown Mysql test container
-        run: docker-compose down
+      - name: Shutdown test container
+        run: docker-compose down test_mysql
