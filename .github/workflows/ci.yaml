@@ -88,9 +88,10 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Build Mysql test container
+        shell: bash
         run: |
           docker-compose up -d --build test_mysql
-          while [ $(docker inspect --format "{{json .State.Health.Status }}" test_mysql) != "\"healthy\"" ]; do printf "."; sleep 1; done
+          while [ $(docker inspect --format "{{json .State.Running }}" test_mysql) != "true" ]; do printf "."; sleep 1; done
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
