@@ -19,7 +19,7 @@ setup(name='pipelinewise-tap-mysql',
       py_modules=['tap_mysql'],
       install_requires=[
           'pendulum==1.5.1',
-          'pipelinewise-singer-python==1.*',
+          'pipelinewise-singer-python>=1,<3',
           'PyMySQL==1.0.2',
           'mysql-replication==0.24',
           'pyyaml==5.4.1',
