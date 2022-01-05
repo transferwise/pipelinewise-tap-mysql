@@ -25,7 +25,7 @@ Column = collections.namedtuple('Column', [
     "column_type",
     "column_key"])
 
-pymysql.converters.conversions[pendulum.Pendulum] = pymysql.converters.escape_datetime
+pymysql.converters.conversions[pendulum.DateTime] = pymysql.converters.escape_datetime
 
 STRING_TYPES = {
     'char',
