@@ -9,7 +9,7 @@ from typing import Optional, Dict, Tuple, Set, List
 from singer import metadata, Schema, get_logger
 from singer.catalog import Catalog, CatalogEntry
 
-from tap_mysql.connection import connect_with_backoff
+from tap_mysql.connection import connect_with_backoff, MySQLConnection
 from tap_mysql.sync_strategies import common
 
 LOGGER = get_logger('tap_mysql')
@@ -120,7 +120,7 @@ def should_run_discovery(column_names: Set[str], md_map: Dict[Tuple, Dict]) -> b
     return False
 
 
-def discover_catalog(mysql_conn: Dict, dbs: str = None, tables: Optional[str] = None):
+def discover_catalog(mysql_conn: MySQLConnection, dbs: str = None, tables: Optional[str] = None):
     """Returns a Catalog describing the structure of the database."""
 
     if dbs:
