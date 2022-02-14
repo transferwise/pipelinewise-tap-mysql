@@ -1,21 +1,21 @@
-#!/usr/bin/env python3
 # pylint: disable=missing-docstring,too-many-locals
 import copy
 import pymysql
 import singer
-from singer import metrics
 
+from typing import Dict
 from singer import metadata, get_logger
+from singer import metrics
 from singer.catalog import Catalog
+from voluptuous import Schema, Required, All, Length
 
+from tap_mysql.connection import connect_with_backoff, MySQLConnection, fetch_server_id
+from tap_mysql.discover_utils import discover_catalog, resolve_catalog
+from tap_mysql.stream_utils import write_schema_message
 from tap_mysql.sync_strategies import binlog
 from tap_mysql.sync_strategies import common
 from tap_mysql.sync_strategies import full_table
 from tap_mysql.sync_strategies import incremental
-
-from tap_mysql.connection import connect_with_backoff, MySQLConnection
-from tap_mysql.discover_utils import discover_catalog, resolve_catalog
-from tap_mysql.stream_utils import write_schema_message
 
 LOGGER = get_logger('tap_mysql')
 
@@ -216,6 +216,10 @@ def do_sync_historical_binlog(mysql_conn, catalog_entry, state, columns):
                                   catalog_entry.tap_stream_id,
                                   'log_pos')
 
+    gtid = singer.get_bookmark(state,
+                               catalog_entry.tap_stream_id,
+                               'gtid')
+
     max_pk_values = singer.get_bookmark(state,
                                         catalog_entry.tap_stream_id,
                                         'max_pk_values')
@@ -224,7 +228,7 @@ def do_sync_historical_binlog(mysql_conn, catalog_entry, state, columns):
 
     stream_version = common.get_stream_version(catalog_entry.tap_stream_id, state)
 
-    if log_file and log_pos and max_pk_values:
+    if (log_file and log_pos and max_pk_values) or (gtid and max_pk_values):
         LOGGER.info("Resuming initial full table sync for LOG_BASED stream %s", catalog_entry.tap_stream_id)
         full_table.sync_table(mysql_conn, catalog_entry, state, columns, stream_version)
 
@@ -237,13 +241,17 @@ def do_sync_historical_binlog(mysql_conn, catalog_entry, state, columns):
                                       False)
 
         current_log_file, current_log_pos = binlog.fetch_current_log_file_and_pos(mysql_conn)
+
+        server_id = fetch_server_id(mysql_conn)
+        current_gtid = binlog.fetch_current_gtid_pos(mysql_conn, str(server_id))
+
         state = singer.write_bookmark(state,
                                       catalog_entry.tap_stream_id,
                                       'version',
                                       stream_version)
 
         if full_table.pks_are_auto_incrementing(mysql_conn, catalog_entry):
-            # We must save log_file and log_pos across FULL_TABLE syncs when using
+            # We must save log_file, log_pos, gtid across FULL_TABLE syncs when using
             # an incrementing PK
             state = singer.write_bookmark(state,
                                           catalog_entry.tap_stream_id,
@@ -254,6 +262,12 @@ def do_sync_historical_binlog(mysql_conn, catalog_entry, state, columns):
                                           catalog_entry.tap_stream_id,
                                           'log_pos',
                                           current_log_pos)
+
+            if current_gtid:
+                state = singer.write_bookmark(state,
+                                              catalog_entry.tap_stream_id,
+                                              'gtid',
+                                              current_gtid)
 
             full_table.sync_table(mysql_conn, catalog_entry, state, columns, stream_version)
 
@@ -268,6 +282,12 @@ def do_sync_historical_binlog(mysql_conn, catalog_entry, state, columns):
                                           catalog_entry.tap_stream_id,
                                           'log_pos',
                                           current_log_pos)
+
+            if current_gtid:
+                state = singer.write_bookmark(state,
+                                              catalog_entry.tap_stream_id,
+                                              'gtid',
+                                              current_gtid)
 
 
 def do_sync_full_table(mysql_conn, catalog_entry, state, columns):
@@ -394,7 +414,7 @@ def main_impl():
         state = args.state or {}
         do_sync(mysql_conn, args.config, catalog, state)
     else:
-        LOGGER.info("No properties were selected")
+        raise ValueError("Hmm I don't know what to do! Neither discovery nor sync mode was selected.")
 
 
 def main():
