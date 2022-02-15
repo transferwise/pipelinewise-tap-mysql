@@ -20,6 +20,7 @@ DEFAULT_SESSION_SQLS = ['SET @@session.time_zone="+0:00"',
                         'SET @@session.net_read_timeout=3600',
                         'SET @@session.innodb_lock_wait_timeout=3600']
 
+
 @backoff.on_exception(backoff.expo,
                       (pymysql.err.OperationalError),
                       max_tries=5,
@@ -156,3 +157,19 @@ def make_connection_wrapper(config):
             connect_with_backoff(self)
 
     return ConnectionWrapper
+
+
+def fetch_server_id(mysql_conn: MySQLConnection) -> int:
+    """
+    Finds server ID
+    Args:
+        mysql_conn: Mysql connection instance
+
+    Returns: server ID
+    """
+    with connect_with_backoff(mysql_conn) as open_conn:
+        with open_conn.cursor() as cur:
+            cur.execute("SELECT @@server_id")
+            server_id = cur.fetchone()[0]
+
+            return server_id
