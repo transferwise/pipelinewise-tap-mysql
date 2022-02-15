@@ -4,6 +4,8 @@
   "user": "<username>",
   "password": "<passwd>",
   "filter_db": "db1,db2",
+  "engine": "<mysql|mariadb>",
+  "use_gtid": false,
   "session_sqls": [
     "SET @@session.time_zone=\"+0:00\"",
     "SET @@session.wait_timeout=28800",
