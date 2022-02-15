@@ -7,7 +7,6 @@ from typing import Dict
 from singer import metadata, get_logger
 from singer import metrics
 from singer.catalog import Catalog
-from voluptuous import Schema, Required, All, Length
 
 from tap_mysql.connection import connect_with_backoff, MySQLConnection, fetch_server_id
 from tap_mysql.discover_utils import discover_catalog, resolve_catalog
