@@ -7,7 +7,7 @@ import singer.metadata
 
 import tap_mysql
 import tap_mysql.discover_utils
-from tap_mysql.connection import connect_with_backoff, MySQLConnection, fetch_server_id
+from tap_mysql.connection import connect_with_backoff, MySQLConnection, fetch_server_id, MARIADB_ENGINE
 
 try:
     import tests.integration.utils as test_utils
@@ -573,7 +573,7 @@ class TestIncrementalReplication(unittest.TestCase):
 
         with connect_with_backoff(self.conn) as open_conn:
             with open_conn.cursor() as cursor:
-                cursor.execute('CREATE TABLE incremental (val int, updated datetime)')
+                cursor.execute('CREATE TABLE incremental (val int, updated datetime, ctime time default current_time())')
                 cursor.execute('INSERT INTO incremental (val, updated) VALUES (1, \'2017-06-01\')')
                 cursor.execute('INSERT INTO incremental (val, updated) VALUES (2, \'2017-06-20\')')
                 cursor.execute('INSERT INTO incremental (val, updated) VALUES (3, \'2017-09-22\')')
@@ -710,7 +710,13 @@ class TestBinlogReplication(unittest.TestCase):
             with open_conn.cursor() as cursor:
                 cursor.execute('CREATE TABLE binlog_1 (id int, updated datetime, '
                                'created_date Date default current_date())')
-                cursor.execute('CREATE TABLE binlog_2 (id int, updated datetime, is_good bool default False)')
+                cursor.execute("""
+                    CREATE TABLE binlog_2 (id int, 
+                    updated datetime, 
+                    is_good bool default False, 
+                    ctime time default current_time(), 
+                    cjson json default '[{"key1": "A", "key2": ["B", 2], "key3": {}}]')
+                """)
                 cursor.execute('INSERT INTO binlog_1 (id, updated) VALUES (1, \'2017-06-01\')')
                 cursor.execute('INSERT INTO binlog_1 (id, updated) VALUES (2, \'2017-06-20\')')
                 cursor.execute('INSERT INTO binlog_1 (id, updated) VALUES (3, \'2017-09-22\')')
@@ -797,11 +803,11 @@ class TestBinlogReplication(unittest.TestCase):
 
         self.assertIsNotNone(singer.get_bookmark(state, 'tap_mysql_test-binlog_1', 'log_file'))
         self.assertIsNotNone(singer.get_bookmark(state, 'tap_mysql_test-binlog_1', 'log_pos'))
-        self.assertIsNotNone(singer.get_bookmark(state, 'tap_mysql_test-binlog_1', 'gtid'))
+        self.assertIsNone(singer.get_bookmark(state, 'tap_mysql_test-binlog_1', 'gtid'))
 
         self.assertIsNotNone(singer.get_bookmark(state, 'tap_mysql_test-binlog_2', 'log_file'))
         self.assertIsNotNone(singer.get_bookmark(state, 'tap_mysql_test-binlog_2', 'log_pos'))
-        self.assertIsNotNone(singer.get_bookmark(state, 'tap_mysql_test-binlog_2', 'gtid'))
+        self.assertIsNone(singer.get_bookmark(state, 'tap_mysql_test-binlog_2', 'gtid'))
 
         self.assertEqual(singer.get_bookmark(state, 'tap_mysql_test-binlog_1', 'version'),
                          activate_version_message_1.version)
@@ -996,11 +1002,11 @@ class TestBinlogReplication(unittest.TestCase):
     def test_binlog_stream_with_gtid(self):
         global SINGER_MESSAGES
 
-        gtid = binlog.fetch_current_gtid_pos(self.conn, str(fetch_server_id(self.conn)))
+        gtid = binlog.fetch_current_gtid_pos(self.conn, str(fetch_server_id(self.conn)), MARIADB_ENGINE)
 
         config = test_utils.get_db_config()
         config['use_gtid'] = True
-        config['engine'] = 'mariadb'
+        config['engine'] = MARIADB_ENGINE
 
         self.state = singer.write_bookmark(self.state,
                                            'tap_mysql_test-binlog_1',

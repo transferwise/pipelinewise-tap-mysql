@@ -198,6 +198,7 @@ def do_sync_incremental(mysql_conn, catalog_entry, state, columns):
 
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
+
 # pylint: disable=too-many-arguments
 def do_sync_historical_binlog(mysql_conn, catalog_entry, state, columns, use_gtid: bool, engine: str):
     binlog.verify_binlog_config(mysql_conn)
@@ -229,10 +230,9 @@ def do_sync_historical_binlog(mysql_conn, catalog_entry, state, columns, use_gti
 
     stream_version = common.get_stream_version(catalog_entry.tap_stream_id, state)
 
-    if ((use_gtid and gtid) or (log_file and log_pos)) and max_pk_values:
+    if (use_gtid and gtid and max_pk_values) or (log_file and log_pos and max_pk_values):
         LOGGER.info("Resuming initial full table sync for LOG_BASED stream %s", catalog_entry.tap_stream_id)
         full_table.sync_table(mysql_conn, catalog_entry, state, columns, stream_version)
-
     else:
         LOGGER.info("Performing initial full table sync for LOG_BASED stream %s", catalog_entry.tap_stream_id)
 
@@ -363,6 +363,10 @@ def sync_binlog_streams(mysql_conn, binlog_catalog, config, state):
 
 
 def do_sync(mysql_conn, config, catalog, state):
+
+    config['use_gtid'] = config.get('use_gtid', False)
+    config['engine'] = config.get('engine', MYSQL_ENGINE).lower()
+
     non_binlog_catalog = get_non_binlog_streams(mysql_conn, catalog, config, state)
     binlog_catalog = get_binlog_streams(mysql_conn, catalog, config, state)
 
@@ -408,9 +412,6 @@ def log_server_params(mysql_conn):
 
 def main_impl():
     args = singer.utils.parse_args(REQUIRED_CONFIG_KEYS)
-
-    args.config['use_gtid'] = args.config.get('use_gtid', False)
-    args.config['engine'] = args.config.get('engine', MYSQL_ENGINE).lower()
 
     mysql_conn = MySQLConnection(args.config)
     log_server_params(mysql_conn)

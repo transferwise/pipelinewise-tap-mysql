@@ -98,7 +98,7 @@ def fetch_current_log_file_and_pos(mysql_conn):
 def fetch_current_gtid_pos(
         mysql_conn: MySQLConnection,
         server_id: Optional[str],
-        engine: str = connection.MYSQL_ENGINE
+        engine: str
 ) -> Optional[str]:
     """
     Find the given server's current GTID position.
