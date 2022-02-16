@@ -16,6 +16,7 @@ from pymysqlreplication.event import RotateEvent, MariadbGtidEvent, GtidEvent
 from pymysqlreplication.row_event import WriteRowsEvent, UpdateRowsEvent, DeleteRowsEvent
 from singer import CatalogEntry, Schema, Catalog, RecordMessage, StateMessage, SchemaMessage
 
+from tap_mysql import connection
 from tap_mysql.connection import MySQLConnection
 from tap_mysql.sync_strategies import binlog
 
@@ -79,7 +80,9 @@ class TestBinlogSyncStrategy(TestCase):
         os.environ['TZ'] = 'EET'
 
         config = {
-            'server_id': '123'
+            'server_id': '123',
+            'use_gtid': False,
+            'engine': connection.MYSQL_ENGINE,
         }
         mysql_con = Mock(spec_set=MySQLConnection)
 
@@ -1793,7 +1796,7 @@ class TestBinlogSyncStrategy(TestCase):
         )
 
     @patch('tap_mysql.sync_strategies.binlog.connect_with_backoff')
-    def test_fetch_current_gtid_pos_success(self, connect_with_backoff):
+    def test_fetch_current_gtid_pos_for_mariadb_success(self, connect_with_backoff):
         mysql_con = MagicMock(spec_set=MySQLConnection).return_value
         cur_mock = MagicMock(spec_set=Cursor).return_value
         cur_mock.__enter__.return_value.fetchone.side_effect = [
@@ -1804,7 +1807,7 @@ class TestBinlogSyncStrategy(TestCase):
 
         connect_with_backoff.return_value = mysql_con
 
-        result = binlog.fetch_current_gtid_pos(mysql_con, '2')
+        result = binlog.fetch_current_gtid_pos(mysql_con, '2', connection.MARIADB_ENGINE)
 
         self.assertEqual(result, '0-2-143')
 
@@ -1816,7 +1819,21 @@ class TestBinlogSyncStrategy(TestCase):
         )
 
     @patch('tap_mysql.sync_strategies.binlog.connect_with_backoff')
-    def test_fetch_current_gtid_pos_no_gtid_found(self, connect_with_backoff):
+    def test_fetch_current_gtid_pos_for_mysql_fails(self, connect_with_backoff):
+        mysql_con = MagicMock(spec_set=MySQLConnection).return_value
+        cur_mock = MagicMock(spec_set=Cursor).return_value
+        mysql_con.__enter__.return_value.cursor.return_value = cur_mock
+
+        connect_with_backoff.return_value = mysql_con
+
+        with self.assertRaises(NotImplementedError):
+            binlog.fetch_current_gtid_pos(mysql_con, '2', connection.MYSQL_ENGINE)
+
+        connect_with_backoff.assert_called_with(mysql_con)
+        cur_mock.__enter__.return_value.execute.assert_not_called()
+
+    @patch('tap_mysql.sync_strategies.binlog.connect_with_backoff')
+    def test_fetch_current_gtid_pos_no_gtid_found_expect_exception(self, connect_with_backoff):
         mysql_con = MagicMock(spec_set=MySQLConnection).return_value
         cur_mock = MagicMock(spec_set=Cursor).return_value
         cur_mock.__enter__.return_value.fetchone.side_effect = [
@@ -1827,9 +1844,10 @@ class TestBinlogSyncStrategy(TestCase):
 
         connect_with_backoff.return_value = mysql_con
 
-        result = binlog.fetch_current_gtid_pos(mysql_con, '2')
+        with self.assertRaises(Exception) as ex:
+            binlog.fetch_current_gtid_pos(mysql_con, '2', connection.MARIADB_ENGINE)
 
-        self.assertIsNone(result)
+            self.assertIn('No suitable GTID was found for server', str(ex))
 
         connect_with_backoff.assert_called_with(mysql_con)
         cur_mock.__enter__.return_value.execute.assert_has_calls(
@@ -1839,7 +1857,7 @@ class TestBinlogSyncStrategy(TestCase):
         )
 
     @patch('tap_mysql.sync_strategies.binlog.connect_with_backoff')
-    def test_fetch_current_gtid_pos_no_gtid_found_for_given_server(self, connect_with_backoff):
+    def test_fetch_current_gtid_pos_no_gtid_found_for_given_server_expect_exception(self, connect_with_backoff):
         mysql_con = MagicMock(spec_set=MySQLConnection).return_value
         cur_mock = MagicMock(spec_set=Cursor).return_value
         cur_mock.__enter__.return_value.fetchone.side_effect = [
@@ -1850,9 +1868,10 @@ class TestBinlogSyncStrategy(TestCase):
 
         connect_with_backoff.return_value = mysql_con
 
-        result = binlog.fetch_current_gtid_pos(mysql_con, '2')
+        with self.assertRaises(Exception) as ex:
+            binlog.fetch_current_gtid_pos(mysql_con, '2', connection.MARIADB_ENGINE)
 
-        self.assertIsNone(result)
+            self.assertIn('No suitable GTID was found for server', str(ex))
 
         connect_with_backoff.assert_called_with(mysql_con)
         cur_mock.__enter__.return_value.execute.assert_has_calls(
@@ -1880,7 +1899,7 @@ class TestBinlogSyncStrategy(TestCase):
             }
         }
 
-        result = binlog.calculate_gtid_bookmark(binlog_streams, state)
+        result = binlog.calculate_gtid_bookmark(binlog_streams, state, connection.MARIADB_ENGINE)
 
         self.assertEqual(result, '0-20-12')
 
@@ -1897,6 +1916,23 @@ class TestBinlogSyncStrategy(TestCase):
             }
         }
 
-        result = binlog.calculate_gtid_bookmark(binlog_streams, state)
+        with self.assertRaises(Exception) as ex:
+            binlog.calculate_gtid_bookmark(binlog_streams, state, connection.MARIADB_ENGINE)
 
-        self.assertIsNone(result)
+            self.assertEqual("Couldn't find any gtid in state bookmarks to resume logical replication", str(ex))
+
+    def test_calculate_gtid_bookmark_for_mysql_not_implemented(self):
+
+        binlog_streams = {
+            'stream1': {'schema': {}},
+            'stream2': {'schema': {}},
+            'stream3': {'schema': {}},
+        }
+
+        state = {
+            'bookmarks': {
+            }
+        }
+
+        with self.assertRaises(NotImplementedError):
+            binlog.calculate_gtid_bookmark(binlog_streams, state, connection.MYSQL_ENGINE)
