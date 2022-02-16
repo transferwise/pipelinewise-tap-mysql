@@ -61,31 +61,29 @@ mysql> select * from example_db.animals;
 
 ### Create the configuration file
 
-Create a config file containing the database connection credentials, e.g.:
+Create a config file containing the database connection credentials, see [sample](config.json.sample).
 
-```json
-{
-  "host": "localhost",
-  "port": "3306",
-  "user": "root",
-  "password": "password"
-}
-```
+List of config parameters:
 
-These are the same basic configuration properties used by the MySQL command-line
-client (`mysql`).
+| Parameter    | type                          | required | default                    | description                                                                                                        |
+|--------------|-------------------------------|----------|----------------------------|--------------------------------------------------------------------------------------------------------------------|
+| host         | string                        | yes      | -                          | mysql/mariadb host                                                                                                 |
+| port         | int                           | yes      | -                          | mysql/mariadb port                                                                                                 |
+| user         | string                        | yes      | -                          | db username                                                                                                        |
+| password     | string                        | yes      | -                          | db password                                                                                                        |
+| cursorclass  | string                        | No       | `pymysql.cursors.SSCursor` | set cursorclass used by PyMYSQL                                                                                    |
+| database     | string                        | No       | -                          | Database to use, None to not use a particular one. Used by PyMYSQL                                                 |
+| server_id    | int                           | False    | Randomly generated int     | Used as the slave id when this tap is connecting to the server                                                     |
+| filter_db    | string                        | False    | -                          | Comma separated list of schemas to extract tables only from particular schemas and to improve data extraction performance |
+| use_gtid     | bool                          | False    | False                      | Flag to enable log based replication using GTID (Only works for Mariadb for now)                                   |
+| engine       | string ('mysql' or 'mariadb') | False    | 'mysql'                    | Indicate which flavor the server is, used for LOG_BASED with GTID                                                  |
+| ssl          | string ("true")               | No       | False                      | Enable SSL connection                                                                                              |
+| ssl_ca       | string                        | No       | -                          | for self-signed SSL                                                                                                |
+| ssl_cert     | string                        | No       | -                          | for self-signed SSL                                                                                                |
+| ssl_key      | string                        | No       | -                          | for self-signed SSL                                                                                                |
+| internal_hostname  | string | No       | -                          | Override match hostname for google cloud                                                                           |
+| session_sqls | List of strings               | No       | ```SET @@session.time_zone="+0:00"<br/>SET @@session.wait_timeout=28800<br/>SET @@session.net_read_timeout=3600<br/>SET @@session.innodb_lock_wait_timeout=3600```| Set session variables dynamically.|
 
-### Optional config parameters
-
-`filter_db`: Comma separated list of schemas to extract tables only from particular schemas and to improve data extraction performance
-
-`session_sqls`: List of SQL commands to run when a connection made. This allows to set session variables dynamically, like timeouts. If not set then the following commands will be executed:
-```
-SET @@session.time_zone="+0:00"
-SET @@session.wait_timeout=28800
-SET @@session.net_read_timeout=3600
-SET @@session.innodb_lock_wait_timeout=3600
-```
 
 ### Discovery mode
 
