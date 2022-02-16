@@ -98,6 +98,7 @@ def fetch_current_log_file_and_pos(mysql_conn):
 def fetch_current_gtid_pos(
         mysql_conn: MySQLConnection,
         server_id: Optional[str],
+        engine: str = connection.MYSQL_ENGINE
 ) -> Optional[str]:
     """
     Find the given server's current GTID position.
@@ -110,39 +111,43 @@ def fetch_current_gtid_pos(
     Args:
         mysql_conn: Mysql connection instance
         server_id: primary's server ID
+        engine: DB engine (mariadb/mysql)
 
-    Returns: Gtid position if found, otherwise None
+    Returns: Gtid position if found, otherwise raises exception
     """
     with connect_with_backoff(mysql_conn) as open_conn:
         with open_conn.cursor() as cur:
-            cur.execute('select @@gtid_current_pos;')
 
-            result = cur.fetchone()
+            if engine != connection.MARIADB_ENGINE:
+                raise NotImplementedError(f'Getting current GTID pos on this server of type '
+                                     f'{engine} is not yet implemented!')
 
-            if result is None:
-                LOGGER.error("GTID is not present!")
-                return None
+            else:
+                cur.execute('select @@gtid_current_pos;')
+                result = cur.fetchone()
 
-            gtids = result[0]
-            LOGGER.debug('Found GTID(s): %s in server %s', gtids, server_id)
+                if result is None:
+                    raise Exception("GTID is not present on this server!")
 
-            for gtid in gtids.split(','):
-                gtid = gtid.strip()
+                gtids = result[0]
+                LOGGER.debug('Found GTID(s): %s in server %s', gtids, server_id)
 
-                if not gtid:
-                    continue
+                for gtid in gtids.split(','):
+                    gtid = gtid.strip()
 
-                gtid_parts = gtid.split('-')
+                    if not gtid:
+                        continue
 
-                if len(gtid_parts) != 3:
-                    continue
+                    gtid_parts = gtid.split('-')
 
-                if gtid_parts[1] == server_id:
-                    LOGGER.info('Using GTID %s for state bookmark', gtid)
-                    return gtid
+                    if len(gtid_parts) != 3:
+                        continue
 
-            LOGGER.warning('No suitable GTID was found for server %s.', server_id)
-            return None
+                    if gtid_parts[1] == server_id:
+                        LOGGER.info('Using GTID %s for state bookmark', gtid)
+                        return gtid
+
+                raise Exception(f'No suitable GTID was found for server {server_id}.')
 
 
 def json_bytes_to_string(data):
@@ -224,15 +229,21 @@ def row_to_singer_record(catalog_entry, version, db_column_map, row, time_extrac
 
 def calculate_gtid_bookmark(
         binlog_streams_map: Dict[str, Any],
-        state: Dict
-) -> Optional[str]:
+        state: Dict,
+        engine: str
+) -> str:
     """
     Finds the earliest bookmarked gtid in the state
     Args:
         binlog_streams_map: dictionary of selected streams
         state: state dict with bookmarks
+        engine: the DB flavor mysql/mariadb
+
     Returns: Min Gtid
     """
+    if engine != connection.MARIADB_ENGINE:
+        raise NotImplementedError(f'Calculating gtid bookmark is not implemented for engine {engine}')
+
     min_gtid = None
     min_seq_no = None
 
@@ -250,6 +261,10 @@ def calculate_gtid_bookmark(
             if min_seq_no is None or gtid_seq_no < min_seq_no:
                 min_seq_no = gtid_seq_no
                 min_gtid = gtid
+
+
+    if not min_gtid:
+        raise Exception("Couldn't find any gtid in state bookmarks to resume logical replication")
 
     LOGGER.info('The earliest bookmarked GTID found in the state is "%s", and will be used to resume replication',
                 min_gtid)
@@ -695,7 +710,7 @@ def create_binlog_stream_reader(
         server_id = random.randint(1, 2 ^ 32)  # generate random server id for this slave
         LOGGER.info("Using randomly generated server_id=%s", server_id)
 
-    engine = config.get('engine', MYSQL_ENGINE)
+    engine = config['engine']
 
     kwargs = {
         'connection_settings': {},
@@ -710,7 +725,7 @@ def create_binlog_stream_reader(
     if config.get('filter_db'):
         kwargs['only_schemas'] = config['filter_db'].split(',')
 
-    if config.get('use_gtid', False):
+    if config['use_gtid']:
 
         if not gtid_pos:
             raise ValueError(f'gtid_pos is empty "{gtid_pos}"! Cannot start logical replication from empty gtid.')
@@ -756,8 +771,8 @@ def sync_binlog_stream(
 
     log_file = log_pos = gtid = None
 
-    if config.get('use_gtid', False):
-        gtid = calculate_gtid_bookmark(binlog_streams_map, state)
+    if config['use_gtid']:
+        gtid = calculate_gtid_bookmark(binlog_streams_map, state, config['engine'])
     else:
         log_file, log_pos = calculate_bookmark(mysql_conn, binlog_streams_map, state)
 
