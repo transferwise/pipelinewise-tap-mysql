@@ -77,6 +77,10 @@ def binlog_stream_requires_historical(catalog_entry, state):
                                   catalog_entry.tap_stream_id,
                                   'log_pos')
 
+    gtid = singer.get_bookmark(state,
+                               catalog_entry.tap_stream_id,
+                               'gtid')
+
     max_pk_values = singer.get_bookmark(state,
                                         catalog_entry.tap_stream_id,
                                         'max_pk_values')
@@ -85,7 +89,7 @@ def binlog_stream_requires_historical(catalog_entry, state):
                                           catalog_entry.tap_stream_id,
                                           'last_pk_fetched')
 
-    if (log_file and log_pos) and (not max_pk_values and not last_pk_fetched):
+    if ((log_file and log_pos) or gtid) and (not max_pk_values and not last_pk_fetched):
         return False
 
     return True
