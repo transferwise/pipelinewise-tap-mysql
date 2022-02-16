@@ -35,8 +35,6 @@ from tap_mysql.connection import connect_with_backoff, make_connection_wrapper, 
 LOGGER = singer.get_logger('tap_mysql')
 
 SDC_DELETED_AT = "_sdc_deleted_at"
-MARIADB_ENGINE = 'mariadb'
-MYSQL_ENGINE = 'mysql'
 UPDATE_BOOKMARK_PERIOD = 1000
 BOOKMARK_KEYS = {'log_file', 'log_pos', 'version', 'gtid'}
 
@@ -702,7 +700,7 @@ def create_binlog_stream_reader(
     kwargs = {
         'connection_settings': {},
         'pymysql_wrapper': make_connection_wrapper(config),
-        'is_mariadb': MARIADB_ENGINE == engine,
+        'is_mariadb': connection.MARIADB_ENGINE == engine,
         'server_id': server_id,  # slave server ID
         'report_slave': socket.gethostname() or 'pipelinewise',  # this is so this slave appears in SHOW SLAVE HOSTS;
         'only_events': [WriteRowsEvent, UpdateRowsEvent, DeleteRowsEvent],

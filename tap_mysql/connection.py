@@ -14,6 +14,8 @@ CONNECT_TIMEOUT_SECONDS = 30
 
 # We need to hold onto this for self-signed SSL
 MATCH_HOSTNAME = ssl.match_hostname
+MARIADB_ENGINE = 'mariadb'
+MYSQL_ENGINE = 'mysql'
 
 DEFAULT_SESSION_SQLS = ['SET @@session.time_zone="+0:00"',
                         'SET @@session.wait_timeout=28800',
