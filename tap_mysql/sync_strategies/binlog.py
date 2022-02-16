@@ -788,8 +788,9 @@ def sync_binlog_stream(
 
     except pymysql.err.OperationalError as ex:
         if ex.args[0] == 1236:
-            LOGGER.error('Cannot resume logical replication from given GTID %s! GTID has to be >= gtid_slave_pos of '
-                         'this server', gtid)
+            LOGGER.error('Cannot resume logical replication from given GTID %s! This GTID might date back to before '
+                         'the new primary has been setup, connect to old primary and consume all binlog events to get '
+                         'a newer GTID then switch back.', gtid)
 
         raise
 
