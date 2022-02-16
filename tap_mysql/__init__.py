@@ -400,6 +400,9 @@ def log_server_params(mysql_conn):
 def main_impl():
     args = singer.utils.parse_args(REQUIRED_CONFIG_KEYS)
 
+    args.config['use_gtid'] = args.config.get('use_gtid', False)
+    args.config['engine'] = args.config.get('engine', connection.MYSQL_ENGINE).lower()
+
     mysql_conn = MySQLConnection(args.config)
     log_server_params(mysql_conn)
 
