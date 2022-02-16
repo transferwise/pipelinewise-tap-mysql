@@ -230,7 +230,7 @@ def do_sync_historical_binlog(mysql_conn, catalog_entry, state, columns, use_gti
 
     stream_version = common.get_stream_version(catalog_entry.tap_stream_id, state)
 
-    if (use_gtid and gtid and max_pk_values) or (log_file and log_pos and max_pk_values):
+    if max_pk_values and ((use_gtid and gtid) or (log_file and log_pos)):
         LOGGER.info("Resuming initial full table sync for LOG_BASED stream %s", catalog_entry.tap_stream_id)
         full_table.sync_table(mysql_conn, catalog_entry, state, columns, stream_version)
     else:
