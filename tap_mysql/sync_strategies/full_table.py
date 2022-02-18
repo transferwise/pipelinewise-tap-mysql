@@ -141,29 +141,9 @@ def sync_table(mysql_conn, catalog_entry, state, columns, stream_version):
     if not initial_full_table_complete and not (version_exists and state_version is None):
         singer.write_message(activate_version_message)
 
-    key_props_are_auto_incrementing = pks_are_auto_incrementing(mysql_conn, catalog_entry)
-
     with connect_with_backoff(mysql_conn) as open_conn:
         with open_conn.cursor() as cur:
             select_sql = common.generate_select_sql(catalog_entry, columns)
-
-            if key_props_are_auto_incrementing:
-                LOGGER.info("Detected auto-incrementing primary key(s) - will replicate incrementally")
-                max_pk_values = singer.get_bookmark(state,
-                                                    catalog_entry.tap_stream_id,
-                                                    'max_pk_values') or get_max_pk_values(cur, catalog_entry)
-
-                if not max_pk_values:
-                    LOGGER.info("No max value for auto-incrementing PK found for table %s", catalog_entry.table)
-                else:
-                    state = singer.write_bookmark(state,
-                                                  catalog_entry.tap_stream_id,
-                                                  'max_pk_values',
-                                                  max_pk_values)
-
-                    pk_clause = generate_pk_clause(catalog_entry, state)
-
-                    select_sql += pk_clause
 
             params = {}
 
