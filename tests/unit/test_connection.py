@@ -31,7 +31,7 @@ class TestConnection(unittest.TestCase):
 
         cur_mock.__enter__.return_value.execute.assert_has_calls(
             [
-                call('select @@server_id;'),
+                call('SELECT @@server_id'),
             ]
         )
 
@@ -54,6 +54,6 @@ class TestConnection(unittest.TestCase):
 
         cur_mock.__enter__.return_value.execute.assert_has_calls(
             [
-                call('select @@server_uuid;'),
+                call('SELECT @@server_uuid'),
             ]
         )
