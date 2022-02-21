@@ -140,10 +140,11 @@ def fetch_current_gtid_pos(
                 cur.execute('select @@GLOBAL.gtid_executed;')
             else:
                 cur.execute('select @@gtid_current_pos;')
-                result = cur.fetchone()
 
-                if result is None:
-                    raise Exception("GTID is not present on this server!")
+            result = cur.fetchone()
+
+            if result is None:
+                raise Exception("GTID is not present on this server!")
 
             gtids = result[0]
             LOGGER.debug('Found GTID(s): %s in server %s', gtids, server)
