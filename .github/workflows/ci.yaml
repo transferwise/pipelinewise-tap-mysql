@@ -42,11 +42,11 @@ jobs:
         python-version: [ 3.7, 3.8 ]
 
     steps:
-      - name: Build db test container
-        run: docker-compose up -d mariadb_server1
-
       - name: Checkout repository
         uses: actions/checkout@v2
+
+      - name: Build db test container
+        run: docker-compose up -d mariadb_server1
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
@@ -74,11 +74,11 @@ jobs:
         python-version: [ 3.7, 3.8 ]
 
     steps:
-      - name: Build db test container
-        run: docker-compose up -d mysql_server
-
       - name: Checkout repository
         uses: actions/checkout@v2
+
+      - name: Build db test container
+        run: docker-compose up -d mysql_server
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
