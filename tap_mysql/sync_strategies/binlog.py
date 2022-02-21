@@ -114,31 +114,31 @@ def fetch_current_log_file_and_pos(mysql_conn):
 
 def fetch_current_gtid_pos(
         mysql_conn: MySQLConnection,
-        server_id: Optional[str],
         engine: str
-) -> Optional[str]:
+) -> str:
     """
     Find the given server's current GTID position.
 
     The sever we're connected to can have a comma separated list of gtids (e.g from past server migrations),
     the right gtid is the one with the same server ID as the given server ID.
 
-    This only works with MariaDB for now.
-
     Args:
         mysql_conn: Mysql connection instance
-        server_id: primary's server ID
         engine: DB engine (mariadb/mysql)
 
     Returns: Gtid position if found, otherwise raises exception
     """
+
+    if engine == connection.MARIADB_ENGINE:
+        server = str(connection.fetch_server_id(mysql_conn))
+    else:
+        server = connection.fetch_server_uuid(mysql_conn)
+
     with connect_with_backoff(mysql_conn) as open_conn:
         with open_conn.cursor() as cur:
 
             if engine != connection.MARIADB_ENGINE:
-                raise NotImplementedError(f'Getting current GTID pos on this server of type '
-                                     f'{engine} is not yet implemented!')
-
+                cur.execute('select @@GLOBAL.gtid_executed;')
             else:
                 cur.execute('select @@gtid_current_pos;')
                 result = cur.fetchone()
@@ -146,8 +146,10 @@ def fetch_current_gtid_pos(
                 if result is None:
                     raise Exception("GTID is not present on this server!")
 
-                gtids = result[0]
-                LOGGER.debug('Found GTID(s): %s in server %s', gtids, server_id)
+            gtids = result[0]
+            LOGGER.debug('Found GTID(s): %s in server %s', gtids, server)
+
+            gtid_to_use = None
 
                 for gtid in gtids.split(','):
                     gtid = gtid.strip()
@@ -155,16 +157,28 @@ def fetch_current_gtid_pos(
                     if not gtid:
                         continue
 
+                if engine != connection.MARIADB_ENGINE:
+                    gtid_parts = gtid.split(':')
+
+                    if len(gtid_parts) != 2:
+                        continue
+
+                    if gtid_parts[0] == server:
+                        gtid_to_use = gtid
+                else:
                     gtid_parts = gtid.split('-')
 
                     if len(gtid_parts) != 3:
                         continue
 
-                    if gtid_parts[1] == server_id:
-                        LOGGER.info('Using GTID %s for state bookmark', gtid)
-                        return gtid
+                    if gtid_parts[1] == server:
+                        gtid_to_use = gtid
 
-                raise Exception(f'No suitable GTID was found for server {server_id}.')
+            if gtid_to_use:
+                LOGGER.info('Using GTID %s for state bookmark', gtid_to_use)
+                return gtid_to_use
+
+    raise Exception(f'No suitable GTID was found for server {server}.')
 
 
 def json_bytes_to_string(data):
@@ -258,9 +272,6 @@ def calculate_gtid_bookmark(
 
     Returns: Min Gtid
     """
-    if engine != connection.MARIADB_ENGINE:
-        raise NotImplementedError(f'Calculating gtid bookmark is not implemented for engine {engine}')
-
     min_gtid = None
     min_seq_no = None
 
@@ -273,7 +284,15 @@ def calculate_gtid_bookmark(
         gtid = bookmark.get('gtid')
 
         if gtid:
-            gtid_seq_no = int(gtid.split('-')[2])
+            if engine == connection.MARIADB_ENGINE:
+                gtid_seq_no = int(gtid.split('-')[2])
+            else:
+                gtid_interval = gtid.split(':')[1]
+
+                if '-' in gtid_interval:
+                    gtid_seq_no = int(gtid_interval.split('-')[1])
+                else:
+                    gtid_seq_no = int(gtid_interval)
 
             if min_seq_no is None or gtid_seq_no < min_seq_no:
                 min_seq_no = gtid_seq_no
