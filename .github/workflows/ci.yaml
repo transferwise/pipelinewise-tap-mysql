@@ -53,6 +53,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Setup virtual environment
+        run: make venv
+
       - name: Integration Tests
         env:
           TAP_MYSQL_PORT: 3306
@@ -84,6 +87,9 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
+
+      - name: Setup virtual environment
+        run: make venv
 
       - name: Integration Tests
         env:
