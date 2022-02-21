@@ -1873,7 +1873,7 @@ class TestBinlogSyncStrategy(TestCase):
 
     @patch('tap_mysql.sync_strategies.binlog.connection.fetch_server_uuid')
     @patch('tap_mysql.sync_strategies.binlog.connect_with_backoff')
-    def test_fetch_current_gtid_pos_for_mysql_fails(
+    def test_fetch_current_gtid_pos_for_mysql_succeeds(
             self, connect_with_backoff, fetch_server_uuid):
 
         mysql_con = MagicMock(spec_set=MySQLConnection).return_value
