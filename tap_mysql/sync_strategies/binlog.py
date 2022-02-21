@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # pylint: disable=missing-function-docstring,too-many-arguments,too-many-branches
 import codecs
 import copy
@@ -151,11 +150,11 @@ def fetch_current_gtid_pos(
 
             gtid_to_use = None
 
-                for gtid in gtids.split(','):
-                    gtid = gtid.strip()
+            for gtid in gtids.split(','):
+                gtid = gtid.strip()
 
-                    if not gtid:
-                        continue
+                if not gtid:
+                    continue
 
                 if engine != connection.MARIADB_ENGINE:
                     gtid_parts = gtid.split(':')
