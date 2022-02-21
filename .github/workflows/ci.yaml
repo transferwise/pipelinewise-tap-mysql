@@ -93,7 +93,7 @@ jobs:
 
       - name: Integration Tests
         env:
-          TAP_MYSQL_PORT: 3306
+          TAP_MYSQL_PORT: 3307
           TAP_MYSQL_USER: replication_user
           TAP_MYSQL_PASSWORD: secret123passwd
           TAP_MYSQL_HOST: localhost
