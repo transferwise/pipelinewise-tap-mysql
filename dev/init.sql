@@ -1,7 +1,9 @@
 # configure replication user
+grant replication client on *.* to 'replication_user'@'%';
 grant replication slave on *.* to 'replication_user'@'%';
-grant BINLOG MONITOR on *.* to 'replication_user'@'%';
 flush privileges;
+
+use tap_mysql_test;
 
 # create objects
 create table r1 (
