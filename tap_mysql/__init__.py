@@ -249,8 +249,7 @@ def do_sync_historical_binlog(mysql_conn, catalog_entry, state, columns, use_gti
 
         current_gtid = None
         if use_gtid:
-            server_id = fetch_server_id(mysql_conn)
-            current_gtid = binlog.fetch_current_gtid_pos(mysql_conn, str(server_id), engine)
+            current_gtid = binlog.fetch_current_gtid_pos(mysql_conn, engine)
 
         state = singer.write_bookmark(state,
                                       catalog_entry.tap_stream_id,
