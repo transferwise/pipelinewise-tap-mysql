@@ -80,6 +80,23 @@ def verify_binlog_config(mysql_conn):
                                 f"not set to 'FULL': {binlog_row_image}.")
 
 
+def verify_gtid_config(mysql_conn: MySQLConnection):
+    """
+    Checks if GTID is enabled, raises exception if it's not
+    Args:
+        mysql_conn: instance of MySQLConnection
+
+    Returns: None if gtid is enabled
+    """
+    with connect_with_backoff(mysql_conn) as open_conn:
+        with open_conn.cursor() as cur:
+            cur.execute("select @@gtid_mode;")
+            binlog_format = cur.fetchone()[0]
+
+            if binlog_format != 'ON':
+                raise Exception('Unable to replicate binlog stream because GTID mode is not enabled.')
+
+
 def fetch_current_log_file_and_pos(mysql_conn):
     with connect_with_backoff(mysql_conn) as open_conn:
         with open_conn.cursor() as cur:

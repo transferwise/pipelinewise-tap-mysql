@@ -207,6 +207,9 @@ def do_sync_incremental(mysql_conn, catalog_entry, state, columns):
 def do_sync_historical_binlog(mysql_conn, catalog_entry, state, columns, use_gtid: bool, engine: str):
     binlog.verify_binlog_config(mysql_conn)
 
+    if use_gtid and engine == MYSQL_ENGINE:
+        binlog.verify_gtid_config(mysql_conn)
+
     is_view = common.get_is_view(catalog_entry)
 
     if is_view:
