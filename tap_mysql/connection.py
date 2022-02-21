@@ -175,3 +175,19 @@ def fetch_server_id(mysql_conn: MySQLConnection) -> int:
             server_id = cur.fetchone()[0]
 
             return server_id
+
+
+def fetch_server_uuid(mysql_conn: MySQLConnection) -> str:
+    """
+    Finds server UUID
+    Args:
+        mysql_conn: Mysql connection instance
+
+    Returns: server UUID
+    """
+    with connect_with_backoff(mysql_conn) as open_conn:
+        with open_conn.cursor() as cur:
+            cur.execute("SELECT @@server_uuid")
+            server_uuid = cur.fetchone()[0]
+
+            return server_uuid

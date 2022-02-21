@@ -1,3 +1,4 @@
+import os
 import unittest
 from unittest.mock import patch
 
@@ -7,7 +8,7 @@ import singer.metadata
 
 import tap_mysql
 import tap_mysql.discover_utils
-from tap_mysql.connection import connect_with_backoff, MySQLConnection, fetch_server_id, MARIADB_ENGINE
+from tap_mysql.connection import connect_with_backoff, MySQLConnection, fetch_server_id, MYSQL_ENGINE
 
 try:
     import tests.integration.utils as test_utils
@@ -573,10 +574,13 @@ class TestIncrementalReplication(unittest.TestCase):
 
         with connect_with_backoff(self.conn) as open_conn:
             with open_conn.cursor() as cursor:
-                cursor.execute('CREATE TABLE incremental (val int, updated datetime, ctime time default current_time())')
-                cursor.execute('INSERT INTO incremental (val, updated) VALUES (1, \'2017-06-01\')')
-                cursor.execute('INSERT INTO incremental (val, updated) VALUES (2, \'2017-06-20\')')
-                cursor.execute('INSERT INTO incremental (val, updated) VALUES (3, \'2017-09-22\')')
+                cursor.execute('CREATE TABLE incremental (val int, updated datetime, ctime time)')
+                cursor.execute('INSERT INTO incremental (val, updated, ctime) VALUES (1, \'2017-06-01\', '
+                               'current_time())')
+                cursor.execute('INSERT INTO incremental (val, updated, ctime) VALUES (2, \'2017-06-20\', '
+                               'current_time())')
+                cursor.execute('INSERT INTO incremental (val, updated, ctime) VALUES (3, \'2017-09-22\', '
+                               'current_time())')
                 cursor.execute('CREATE TABLE integer_incremental (val int, updated int)')
                 cursor.execute('INSERT INTO integer_incremental (val, updated) VALUES (1, 1)')
                 cursor.execute('INSERT INTO integer_incremental (val, updated) VALUES (2, 2)')
@@ -709,20 +713,23 @@ class TestBinlogReplication(unittest.TestCase):
         with connect_with_backoff(self.conn) as open_conn:
             with open_conn.cursor() as cursor:
                 cursor.execute('CREATE TABLE binlog_1 (id int, updated datetime, '
-                               'created_date Date default current_date())')
+                               'created_date Date)')
                 cursor.execute("""
                     CREATE TABLE binlog_2 (id int, 
                     updated datetime, 
                     is_good bool default False, 
-                    ctime time default current_time(), 
-                    cjson json default '[{"key1": "A", "key2": ["B", 2], "key3": {}}]')
+                    ctime time, 
+                    cjson json)
                 """)
-                cursor.execute('INSERT INTO binlog_1 (id, updated) VALUES (1, \'2017-06-01\')')
-                cursor.execute('INSERT INTO binlog_1 (id, updated) VALUES (2, \'2017-06-20\')')
-                cursor.execute('INSERT INTO binlog_1 (id, updated) VALUES (3, \'2017-09-22\')')
-                cursor.execute('INSERT INTO binlog_2 (id, updated) VALUES (1, \'2017-10-22\')')
-                cursor.execute('INSERT INTO binlog_2 (id, updated) VALUES (2, \'2017-11-10\')')
-                cursor.execute('INSERT INTO binlog_2 (id, updated) VALUES (3, \'2017-12-10\')')
+                cursor.execute('INSERT INTO binlog_1 (id, updated, created_date) VALUES (1, \'2017-06-01\', current_date())')
+                cursor.execute('INSERT INTO binlog_1 (id, updated, created_date) VALUES (2, \'2017-06-20\', current_date())')
+                cursor.execute('INSERT INTO binlog_1 (id, updated, created_date) VALUES (3, \'2017-09-22\', current_date())')
+                cursor.execute('INSERT INTO binlog_2 (id, updated, ctime, cjson) VALUES (1, \'2017-10-22\', '
+                               'current_time(), \'[{"key1": "A", "key2": ["B", 2], "key3": {}}]\')')
+                cursor.execute('INSERT INTO binlog_2 (id, updated, ctime, cjson) VALUES (2, \'2017-11-10\', '
+                               'current_time(), \'[{"key1": "A", "key2": ["B", 2], "key3": {}}]\')')
+                cursor.execute('INSERT INTO binlog_2 (id, updated, ctime, cjson) VALUES (3, \'2017-12-10\', '
+                               'current_time(), \'[{"key1": "A", "key2": ["B", 2], "key3": {}}]\')')
                 cursor.execute('UPDATE binlog_1 set updated=\'2018-06-18\' WHERE id = 3')
                 cursor.execute('UPDATE binlog_2 set updated=\'2018-06-18\' WHERE id = 2')
                 cursor.execute('DELETE FROM binlog_1 WHERE id = 2')
@@ -1002,11 +1009,12 @@ class TestBinlogReplication(unittest.TestCase):
     def test_binlog_stream_with_gtid(self):
         global SINGER_MESSAGES
 
-        gtid = binlog.fetch_current_gtid_pos(self.conn, str(fetch_server_id(self.conn)), MARIADB_ENGINE)
+        engine = os.getenv('TAP_MYSQL_ENGINE', MYSQL_ENGINE)
+        gtid = binlog.fetch_current_gtid_pos(self.conn, os.environ['TAP_MYSQL_ENGINE'])
 
         config = test_utils.get_db_config()
         config['use_gtid'] = True
-        config['engine'] = MARIADB_ENGINE
+        config['engine'] = engine
 
         self.state = singer.write_bookmark(self.state,
                                            'tap_mysql_test-binlog_1',
