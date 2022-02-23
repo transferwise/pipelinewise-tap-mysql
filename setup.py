@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setup(name='pipelinewise-tap-mysql',
       version='1.4.3',
-      description='Singer.io tap for extracting data from MySQL - PipelineWise compatible',
+      description='Singer.io tap for extracting data from MySQL & MariaDB - PipelineWise compatible',
       long_description=long_description,
       long_description_content_type='text/markdown',
       author='Wise',
@@ -18,17 +18,17 @@ setup(name='pipelinewise-tap-mysql',
       ],
       py_modules=['tap_mysql'],
       install_requires=[
-          'pendulum==1.5.1',
+          'pendulum==2.1.2',
           'pipelinewise-singer-python==1.*',
           'PyMySQL==1.0.2',
-          'mysql-replication==0.24',
-          'pyyaml==5.4.1',
+          'mysql-replication==0.28',
           'plpygis==0.2.0',
+          'tzlocal==2.1',
       ],
       extras_require={
           'test': [
               'nose==1.3.*',
-              'pylint==2.9.3',
+              'pylint==2.12.2',
               'nose-cov==1.6'
           ]
       },

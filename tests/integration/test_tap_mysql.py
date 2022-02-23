@@ -1,3 +1,4 @@
+import os
 import unittest
 from unittest.mock import patch
 
@@ -7,7 +8,7 @@ import singer.metadata
 
 import tap_mysql
 import tap_mysql.discover_utils
-from tap_mysql.connection import connect_with_backoff, MySQLConnection
+from tap_mysql.connection import connect_with_backoff, MySQLConnection, fetch_server_id, MYSQL_ENGINE
 
 try:
     import tests.integration.utils as test_utils
@@ -573,10 +574,13 @@ class TestIncrementalReplication(unittest.TestCase):
 
         with connect_with_backoff(self.conn) as open_conn:
             with open_conn.cursor() as cursor:
-                cursor.execute('CREATE TABLE incremental (val int, updated datetime)')
-                cursor.execute('INSERT INTO incremental (val, updated) VALUES (1, \'2017-06-01\')')
-                cursor.execute('INSERT INTO incremental (val, updated) VALUES (2, \'2017-06-20\')')
-                cursor.execute('INSERT INTO incremental (val, updated) VALUES (3, \'2017-09-22\')')
+                cursor.execute('CREATE TABLE incremental (val int, updated datetime, ctime time)')
+                cursor.execute('INSERT INTO incremental (val, updated, ctime) VALUES (1, \'2017-06-01\', '
+                               'current_time())')
+                cursor.execute('INSERT INTO incremental (val, updated, ctime) VALUES (2, \'2017-06-20\', '
+                               'current_time())')
+                cursor.execute('INSERT INTO incremental (val, updated, ctime) VALUES (3, \'2017-09-22\', '
+                               'current_time())')
                 cursor.execute('CREATE TABLE integer_incremental (val int, updated int)')
                 cursor.execute('INSERT INTO integer_incremental (val, updated) VALUES (1, 1)')
                 cursor.execute('INSERT INTO integer_incremental (val, updated) VALUES (2, 2)')
@@ -699,16 +703,6 @@ class TestIncrementalReplication(unittest.TestCase):
 
 class TestBinlogReplication(unittest.TestCase):
 
-    # def tearDown(self) -> None:
-    #     with connect_with_backoff(self.conn) as open_conn:
-    #         with open_conn.cursor() as cursor:
-    #             cursor.execute('DROP TABLE binlog_1;')
-    #             cursor.execute('DROP TABLE binlog_2;')
-    #
-    #         open_conn.commit()
-    #
-    #     self.conn = None
-
     def setUp(self):
         self.maxDiff = None
         self.state = {}
@@ -718,14 +712,24 @@ class TestBinlogReplication(unittest.TestCase):
 
         with connect_with_backoff(self.conn) as open_conn:
             with open_conn.cursor() as cursor:
-                cursor.execute('CREATE TABLE binlog_1 (id int, updated datetime)')
-                cursor.execute('CREATE TABLE binlog_2 (id int, updated datetime)')
-                cursor.execute('INSERT INTO binlog_1 (id, updated) VALUES (1, \'2017-06-01\')')
-                cursor.execute('INSERT INTO binlog_1 (id, updated) VALUES (2, \'2017-06-20\')')
-                cursor.execute('INSERT INTO binlog_1 (id, updated) VALUES (3, \'2017-09-22\')')
-                cursor.execute('INSERT INTO binlog_2 (id, updated) VALUES (1, \'2017-10-22\')')
-                cursor.execute('INSERT INTO binlog_2 (id, updated) VALUES (2, \'2017-11-10\')')
-                cursor.execute('INSERT INTO binlog_2 (id, updated) VALUES (3, \'2017-12-10\')')
+                cursor.execute('CREATE TABLE binlog_1 (id int, updated datetime, '
+                               'created_date Date)')
+                cursor.execute("""
+                    CREATE TABLE binlog_2 (id int, 
+                    updated datetime, 
+                    is_good bool default False, 
+                    ctime time, 
+                    cjson json)
+                """)
+                cursor.execute('INSERT INTO binlog_1 (id, updated, created_date) VALUES (1, \'2017-06-01\', current_date())')
+                cursor.execute('INSERT INTO binlog_1 (id, updated, created_date) VALUES (2, \'2017-06-20\', current_date())')
+                cursor.execute('INSERT INTO binlog_1 (id, updated, created_date) VALUES (3, \'2017-09-22\', current_date())')
+                cursor.execute('INSERT INTO binlog_2 (id, updated, ctime, cjson) VALUES (1, \'2017-10-22\', '
+                               'current_time(), \'[{"key1": "A", "key2": ["B", 2], "key3": {}}]\')')
+                cursor.execute('INSERT INTO binlog_2 (id, updated, ctime, cjson) VALUES (2, \'2017-11-10\', '
+                               'current_time(), \'[{"key1": "A", "key2": ["B", 2], "key3": {}}]\')')
+                cursor.execute('INSERT INTO binlog_2 (id, updated, ctime, cjson) VALUES (3, \'2017-12-10\', '
+                               'current_time(), \'[{"key1": "A", "key2": ["B", 2], "key3": {}}]\')')
                 cursor.execute('UPDATE binlog_1 set updated=\'2018-06-18\' WHERE id = 3')
                 cursor.execute('UPDATE binlog_2 set updated=\'2018-06-18\' WHERE id = 2')
                 cursor.execute('DELETE FROM binlog_1 WHERE id = 2')
@@ -766,12 +770,15 @@ class TestBinlogReplication(unittest.TestCase):
                                                'version',
                                                singer.utils.now())
 
-    def test_initial_full_table(self):
-        state = {}
-        binlog.fetch_current_log_file_and_pos(self.conn)
-
+    def tearDown(self) -> None:
         global SINGER_MESSAGES
         SINGER_MESSAGES.clear()
+
+    def test_initial_full_table(self):
+        state = {}
+
+        global SINGER_MESSAGES
+
         tap_mysql.do_sync(self.conn, {}, self.catalog, state)
 
         message_types = [type(m) for m in SINGER_MESSAGES]
@@ -801,11 +808,13 @@ class TestBinlogReplication(unittest.TestCase):
             lambda m: isinstance(m, singer.ActivateVersionMessage) and m.stream == 'tap_mysql_test-binlog_2',
             SINGER_MESSAGES))[0]
 
-        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_1', 'log_file'))
-        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_1', 'log_pos'))
+        self.assertIsNotNone(singer.get_bookmark(state, 'tap_mysql_test-binlog_1', 'log_file'))
+        self.assertIsNotNone(singer.get_bookmark(state, 'tap_mysql_test-binlog_1', 'log_pos'))
+        self.assertIsNone(singer.get_bookmark(state, 'tap_mysql_test-binlog_1', 'gtid'))
 
-        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_2', 'log_file'))
-        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_2', 'log_pos'))
+        self.assertIsNotNone(singer.get_bookmark(state, 'tap_mysql_test-binlog_2', 'log_file'))
+        self.assertIsNotNone(singer.get_bookmark(state, 'tap_mysql_test-binlog_2', 'log_pos'))
+        self.assertIsNone(singer.get_bookmark(state, 'tap_mysql_test-binlog_2', 'gtid'))
 
         self.assertEqual(singer.get_bookmark(state, 'tap_mysql_test-binlog_1', 'version'),
                          activate_version_message_1.version)
@@ -853,7 +862,6 @@ class TestBinlogReplication(unittest.TestCase):
 
     def test_binlog_stream(self):
         global SINGER_MESSAGES
-        SINGER_MESSAGES.clear()
 
         config = test_utils.get_db_config()
         config['server_id'] = "100"
@@ -909,7 +917,6 @@ class TestBinlogReplication(unittest.TestCase):
 
     def test_binlog_stream_with_alteration(self):
         global SINGER_MESSAGES
-        SINGER_MESSAGES.clear()
 
         config = test_utils.get_db_config()
         config['server_id'] = "100"
@@ -998,6 +1005,68 @@ class TestBinlogReplication(unittest.TestCase):
 
         self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_2', 'log_file'))
         self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_2', 'log_pos'))
+
+    def test_binlog_stream_with_gtid(self):
+        global SINGER_MESSAGES
+
+        engine = os.getenv('TAP_MYSQL_ENGINE', MYSQL_ENGINE)
+        gtid = binlog.fetch_current_gtid_pos(self.conn, os.environ['TAP_MYSQL_ENGINE'])
+
+        config = test_utils.get_db_config()
+        config['use_gtid'] = True
+        config['engine'] = engine
+
+        self.state = singer.write_bookmark(self.state,
+                                           'tap_mysql_test-binlog_1',
+                                           'gtid',
+                                           gtid)
+
+        self.state = singer.write_bookmark(self.state,
+                                           'tap_mysql_test-binlog_2',
+                                           'gtid',
+                                           gtid)
+
+        with connect_with_backoff(self.conn) as open_conn:
+            with open_conn.cursor() as cursor:
+                cursor.execute('INSERT INTO binlog_1 (id, updated) VALUES (4, \'2022-06-20\')')
+                cursor.execute('INSERT INTO binlog_1 (id, updated) VALUES (5, \'2022-09-21\')')
+                cursor.execute('INSERT INTO binlog_2 (id, updated) VALUES (4, \'2017-12-10\')')
+                cursor.execute('delete from binlog_1 WHERE id = 3')
+
+            open_conn.commit()
+
+        tap_mysql.do_sync(self.conn, config, self.catalog, self.state)
+
+        record_messages = list(filter(lambda m: isinstance(m, singer.RecordMessage), SINGER_MESSAGES))
+
+        message_types = [type(m) for m in SINGER_MESSAGES]
+        self.assertEqual(message_types,
+                         [singer.StateMessage,
+                          singer.SchemaMessage,
+                          singer.SchemaMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.StateMessage,
+                          ])
+
+        self.assertEqual([('tap_mysql_test-binlog_1', 4, False),
+                          ('tap_mysql_test-binlog_1', 5, False),
+                          ('tap_mysql_test-binlog_2', 4, False),
+                          ('tap_mysql_test-binlog_1', 3, True)],
+                         [(m.stream,
+                           m.record['id'],
+                           m.record.get(binlog.SDC_DELETED_AT) is not None)
+                          for m in record_messages])
+
+        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_1', 'log_file'))
+        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_1', 'log_pos'))
+        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_1', 'gtid'))
+
+        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_2', 'log_file'))
+        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_2', 'log_pos'))
+        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_2', 'gtid'))
 
 
 class TestViews(unittest.TestCase):
@@ -1313,9 +1382,3 @@ class TestBitBooleanMapping(unittest.TestCase):
         with connect_with_backoff(self.conn) as open_conn:
             with open_conn.cursor() as cursor:
                 cursor.execute('DROP TABLE bit_booleans_table;')
-
-
-# if __name__ == "__main__":
-#     test1 = TestBinlogReplication()
-#     test1.setUp()
-#     test1.test_binlog_stream()
