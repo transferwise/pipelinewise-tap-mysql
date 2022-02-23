@@ -14,11 +14,14 @@ CONNECT_TIMEOUT_SECONDS = 30
 
 # We need to hold onto this for self-signed SSL
 MATCH_HOSTNAME = ssl.match_hostname
+MARIADB_ENGINE = 'mariadb'
+MYSQL_ENGINE = 'mysql'
 
 DEFAULT_SESSION_SQLS = ['SET @@session.time_zone="+0:00"',
                         'SET @@session.wait_timeout=28800',
                         'SET @@session.net_read_timeout=3600',
                         'SET @@session.innodb_lock_wait_timeout=3600']
+
 
 @backoff.on_exception(backoff.expo,
                       (pymysql.err.OperationalError),
@@ -156,3 +159,35 @@ def make_connection_wrapper(config):
             connect_with_backoff(self)
 
     return ConnectionWrapper
+
+
+def fetch_server_id(mysql_conn: MySQLConnection) -> int:
+    """
+    Finds server ID
+    Args:
+        mysql_conn: Mysql connection instance
+
+    Returns: server ID
+    """
+    with connect_with_backoff(mysql_conn) as open_conn:
+        with open_conn.cursor() as cur:
+            cur.execute("SELECT @@server_id")
+            server_id = cur.fetchone()[0]
+
+            return server_id
+
+
+def fetch_server_uuid(mysql_conn: MySQLConnection) -> str:
+    """
+    Finds server UUID
+    Args:
+        mysql_conn: Mysql connection instance
+
+    Returns: server UUID
+    """
+    with connect_with_backoff(mysql_conn) as open_conn:
+        with open_conn.cursor() as cur:
+            cur.execute("SELECT @@server_uuid")
+            server_uuid = cur.fetchone()[0]
+
+            return server_uuid

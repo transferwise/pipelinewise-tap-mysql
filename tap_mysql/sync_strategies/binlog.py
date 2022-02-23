@@ -1,22 +1,25 @@
-#!/usr/bin/env python3
 # pylint: disable=missing-function-docstring,too-many-arguments,too-many-branches
 import codecs
 import copy
 import datetime
 import json
+import random
 import re
+import socket
 import pymysql.connections
 import pymysql.err
 import pytz
 import singer
 import tzlocal
 
-from typing import Dict, Set, Union, Optional, Any
+import tap_mysql.sync_strategies.common as common
+import tap_mysql.connection as connection
+
+from typing import Dict, Set, Union, Optional, Any, Tuple
 from plpygis import Geometry
 from pymysqlreplication import BinLogStreamReader
 from pymysqlreplication.constants import FIELD_TYPE
-from pymysqlreplication.event import RotateEvent
-import tap_mysql.sync_strategies.common as common
+from pymysqlreplication.event import RotateEvent, MariadbGtidEvent, GtidEvent
 from pymysqlreplication.row_event import (
     DeleteRowsEvent,
     UpdateRowsEvent,
@@ -31,10 +34,8 @@ from tap_mysql.connection import connect_with_backoff, make_connection_wrapper, 
 LOGGER = singer.get_logger('tap_mysql')
 
 SDC_DELETED_AT = "_sdc_deleted_at"
-
 UPDATE_BOOKMARK_PERIOD = 1000
-
-BOOKMARK_KEYS = {'log_file', 'log_pos', 'version'}
+BOOKMARK_KEYS = {'log_file', 'log_pos', 'version', 'gtid'}
 
 MYSQL_TIMESTAMP_TYPES = {
     FIELD_TYPE.TIMESTAMP,
@@ -78,22 +79,21 @@ def verify_binlog_config(mysql_conn):
                                 f"not set to 'FULL': {binlog_row_image}.")
 
 
-def verify_log_file_exists(mysql_conn, log_file, log_pos):
+def verify_gtid_config(mysql_conn: MySQLConnection):
+    """
+    Checks if GTID is enabled, raises exception if it's not
+    Args:
+        mysql_conn: instance of MySQLConnection
+
+    Returns: None if gtid is enabled
+    """
     with connect_with_backoff(mysql_conn) as open_conn:
         with open_conn.cursor() as cur:
-            cur.execute("SHOW BINARY LOGS")
-            result = cur.fetchall()
+            cur.execute("select @@gtid_mode;")
+            binlog_format = cur.fetchone()[0]
 
-            existing_log_file = list(filter(lambda log: log[0] == log_file, result))
-
-            if not existing_log_file:
-                raise Exception(f"Unable to replicate binlog stream because log file {log_file} does not exist.")
-
-            current_log_pos = existing_log_file[0][1]
-
-            if log_pos > current_log_pos:
-                raise Exception(f"Unable to replicate binlog stream because requested position ({log_pos}) "
-                                f"for log file {log_file} is greater than current position ({current_log_pos}). ")
+            if binlog_format != 'ON':
+                raise Exception('Unable to replicate binlog stream because GTID mode is not enabled.')
 
 
 def fetch_current_log_file_and_pos(mysql_conn):
@@ -111,13 +111,74 @@ def fetch_current_log_file_and_pos(mysql_conn):
             return current_log_file, current_log_pos
 
 
-def fetch_server_id(mysql_conn):
+def fetch_current_gtid_pos(
+        mysql_conn: MySQLConnection,
+        engine: str
+) -> str:
+    """
+    Find the given server's current GTID position.
+
+    The sever we're connected to can have a comma separated list of gtids (e.g from past server migrations),
+    the right gtid is the one with the same server ID as the given server ID.
+
+    Args:
+        mysql_conn: Mysql connection instance
+        engine: DB engine (mariadb/mysql)
+
+    Returns: Gtid position if found, otherwise raises exception
+    """
+
+    if engine == connection.MARIADB_ENGINE:
+        server = str(connection.fetch_server_id(mysql_conn))
+    else:
+        server = connection.fetch_server_uuid(mysql_conn)
+
     with connect_with_backoff(mysql_conn) as open_conn:
         with open_conn.cursor() as cur:
-            cur.execute("SELECT @@server_id")
-            server_id = cur.fetchone()[0]
 
-            return server_id
+            if engine != connection.MARIADB_ENGINE:
+                cur.execute('select @@GLOBAL.gtid_executed;')
+            else:
+                cur.execute('select @@gtid_current_pos;')
+
+            result = cur.fetchone()
+
+            if result is None:
+                raise Exception("GTID is not present on this server!")
+
+            gtids = result[0]
+            LOGGER.debug('Found GTID(s): %s in server %s', gtids, server)
+
+            gtid_to_use = None
+
+            for gtid in gtids.split(','):
+                gtid = gtid.strip()
+
+                if not gtid:
+                    continue
+
+                if engine != connection.MARIADB_ENGINE:
+                    gtid_parts = gtid.split(':')
+
+                    if len(gtid_parts) != 2:
+                        continue
+
+                    if gtid_parts[0] == server:
+                        gtid_to_use = gtid
+                else:
+                    gtid_parts = gtid.split('-')
+
+                    if len(gtid_parts) != 3:
+                        continue
+
+                    if gtid_parts[1] == server:
+                        gtid_to_use = gtid
+
+            if gtid_to_use:
+                LOGGER.info('Using GTID %s for state bookmark', gtid_to_use)
+                return gtid_to_use
+
+    raise Exception(f'No suitable GTID was found for server {server}.')
 
 
 def json_bytes_to_string(data):
@@ -126,6 +187,7 @@ def json_bytes_to_string(data):
     if isinstance(data, tuple):  return tuple(map(json_bytes_to_string, data))
     if isinstance(data, list):   return list(map(json_bytes_to_string, data))
     return data
+
 
 # pylint: disable=too-many-locals
 def row_to_singer_record(catalog_entry, version, db_column_map, row, time_extracted):
@@ -196,7 +258,57 @@ def row_to_singer_record(catalog_entry, version, db_column_map, row, time_extrac
         time_extracted=time_extracted)
 
 
-def get_min_log_pos_per_log_file(binlog_streams_map, state):
+def calculate_gtid_bookmark(
+        binlog_streams_map: Dict[str, Any],
+        state: Dict,
+        engine: str
+) -> str:
+    """
+    Finds the earliest bookmarked gtid in the state
+    Args:
+        binlog_streams_map: dictionary of selected streams
+        state: state dict with bookmarks
+        engine: the DB flavor mysql/mariadb
+
+    Returns: Min Gtid
+    """
+    min_gtid = None
+    min_seq_no = None
+
+    for tap_stream_id, bookmark in state.get('bookmarks', {}).items():
+        stream = binlog_streams_map.get(tap_stream_id)
+
+        if not stream:
+            continue
+
+        gtid = bookmark.get('gtid')
+
+        if gtid:
+            if engine == connection.MARIADB_ENGINE:
+                gtid_seq_no = int(gtid.split('-')[2])
+            else:
+                gtid_interval = gtid.split(':')[1]
+
+                if '-' in gtid_interval:
+                    gtid_seq_no = int(gtid_interval.split('-')[1])
+                else:
+                    gtid_seq_no = int(gtid_interval)
+
+            if min_seq_no is None or gtid_seq_no < min_seq_no:
+                min_seq_no = gtid_seq_no
+                min_gtid = gtid
+
+
+    if not min_gtid:
+        raise Exception("Couldn't find any gtid in state bookmarks to resume logical replication")
+
+    LOGGER.info('The earliest bookmarked GTID found in the state is "%s", and will be used to resume replication',
+                min_gtid)
+
+    return min_gtid
+
+
+def get_min_log_pos_per_log_file(binlog_streams_map, state) -> Dict[str, Dict]:
     min_log_pos_per_file = {}
 
     for tap_stream_id, bookmark in state.get('bookmarks', {}).items():
@@ -224,7 +336,7 @@ def get_min_log_pos_per_log_file(binlog_streams_map, state):
     return min_log_pos_per_file
 
 
-def calculate_bookmark(mysql_conn, binlog_streams_map, state):
+def calculate_bookmark(mysql_conn, binlog_streams_map, state) -> Tuple[str, int]:
     min_log_pos_per_file = get_min_log_pos_per_log_file(binlog_streams_map, state)
 
     with connect_with_backoff(mysql_conn) as open_conn:
@@ -249,7 +361,29 @@ def calculate_bookmark(mysql_conn, binlog_streams_map, state):
             raise Exception("Unable to replicate binlog stream because no binary logs exist on the server.")
 
 
-def update_bookmarks(state, binlog_streams_map, log_file, log_pos):
+def update_bookmarks(
+        state: Dict,
+        binlog_streams_map: Dict,
+        log_file: str,
+        log_pos: int,
+        gtid: Optional[str]) -> Dict:
+    """
+    Updates the state bookmarks with the given binlog file & position or GTID
+    Args:
+        state: state to update
+        binlog_streams_map: dictionary of log based streams
+        log_file: new binlog file
+        log_pos: new binlog pos
+        gtid: new gtid pos
+
+    Returns: updated state
+    """
+    LOGGER.debug('Updating state bookmark to binlog file and pos and GTID: %s, %d, %s', log_file, log_pos, gtid)
+
+    if log_file and not log_pos:
+        raise ValueError("binlog_file is present but binlog_pos is null! Please provide a binlog position "
+                         "to properly update the state")
+
     for tap_stream_id in binlog_streams_map.keys():
         state = singer.write_bookmark(state,
                                       tap_stream_id,
@@ -260,6 +394,13 @@ def update_bookmarks(state, binlog_streams_map, log_file, log_pos):
                                       tap_stream_id,
                                       'log_pos',
                                       log_pos)
+
+        # update gtid only if it's not null
+        if gtid:
+            state = singer.write_bookmark(state,
+                                          tap_stream_id,
+                                          'gtid',
+                                          gtid)
 
     return state
 
@@ -283,7 +424,7 @@ def handle_write_rows_event(event, catalog_entry, state, columns, rows_saved, ti
                                               time_extracted)
 
         singer.write_message(record_message)
-        rows_saved = rows_saved + 1
+        rows_saved += 1
 
     return rows_saved
 
@@ -304,7 +445,7 @@ def handle_update_rows_event(event, catalog_entry, state, columns, rows_saved, t
 
         singer.write_message(record_message)
 
-        rows_saved = rows_saved + 1
+        rows_saved += 1
 
     return rows_saved
 
@@ -331,7 +472,7 @@ def handle_delete_rows_event(event, catalog_entry, state, columns, rows_saved, t
 
         singer.write_message(record_message)
 
-        rows_saved = rows_saved + 1
+        rows_saved += 1
 
     return rows_saved
 
@@ -380,6 +521,7 @@ def __get_diff_in_columns_list(
 
     return set(binlog_columns_filtered).difference(schema_properties)
 
+
 # pylint: disable=R1702,R0915
 def _run_binlog_sync(
         mysql_conn: MySQLConnection,
@@ -389,13 +531,13 @@ def _run_binlog_sync(
         config: Dict,
         end_log_file: str,
         end_log_pos: int):
-    time_extracted = utils.now()
 
-    rows_saved = 0
+    processed_rows_events = 0
     events_skipped = 0
 
     log_file = None
     log_pos = None
+    gtid_pos = reader.auto_position  # initial gtid, we set this when we created the reader's instance
 
     # A set to hold all columns that are detected as we sync but should be ignored cuz they are unsupported types.
     # Saving them here to avoid doing the check if we should ignore a column over and over again
@@ -427,11 +569,40 @@ def _run_binlog_sync(
             break
 
         if isinstance(binlog_event, RotateEvent):
+            LOGGER.debug('RotateEvent: log_file=%s, log_pos=%d',
+                         binlog_event.next_binlog,
+                         binlog_event.position)
+
             state = update_bookmarks(state,
                                      binlog_streams_map,
                                      binlog_event.next_binlog,
-                                     binlog_event.position)
+                                     binlog_event.position,
+                                     gtid_pos
+                                     )
+
+        elif isinstance(binlog_event, MariadbGtidEvent) or isinstance(binlog_event, GtidEvent):
+            gtid_pos = binlog_event.gtid
+
+            LOGGER.debug('%s: gtid=%s',
+                         binlog_event.__class__.__name__,
+                         gtid_pos)
+
+            state = update_bookmarks(state,
+                                     binlog_streams_map,
+                                     log_file,
+                                     log_pos,
+                                     gtid_pos
+                                     )
+
+            # There is strange behavior happening when using GTID in the pymysqlreplication lib,
+            # explained here: https://github.com/noplay/python-mysql-replication/issues/367
+            # Fix: Updating the reader's auto-position to the newly encountered gtid means we won't have to restart
+            # consuming binlog from old GTID pos when connection to server is lost.
+            reader.auto_position = gtid_pos
+
         else:
+            time_extracted = utils.now()
+
             tap_stream_id = common.generate_tap_stream_id(binlog_event.schema, binlog_event.table)
             streams_map_entry = binlog_streams_map.get(tap_stream_id, {})
             catalog_entry = streams_map_entry.get('catalog_entry')
@@ -443,7 +614,7 @@ def _run_binlog_sync(
                 if events_skipped % UPDATE_BOOKMARK_PERIOD == 0:
                     LOGGER.debug("Skipped %s events so far as they were not for selected tables; %s rows extracted",
                                  events_skipped,
-                                 rows_saved)
+                                 processed_rows_events)
             else:
                 # Compare event's columns to the schema properties
                 diff = __get_diff_in_columns_list(binlog_event,
@@ -502,50 +673,119 @@ def _run_binlog_sync(
                             columns = new_columns
 
                 if isinstance(binlog_event, WriteRowsEvent):
-                    rows_saved = handle_write_rows_event(binlog_event,
-                                                         catalog_entry,
-                                                         state,
-                                                         columns,
-                                                         rows_saved,
-                                                         time_extracted)
+                    processed_rows_events = handle_write_rows_event(binlog_event,
+                                                                    catalog_entry,
+                                                                    state,
+                                                                    columns,
+                                                                    processed_rows_events,
+                                                                    time_extracted)
 
                 elif isinstance(binlog_event, UpdateRowsEvent):
-                    rows_saved = handle_update_rows_event(binlog_event,
-                                                          catalog_entry,
-                                                          state,
-                                                          columns,
-                                                          rows_saved,
-                                                          time_extracted)
+                    processed_rows_events = handle_update_rows_event(binlog_event,
+                                                                     catalog_entry,
+                                                                     state,
+                                                                     columns,
+                                                                     processed_rows_events,
+                                                                     time_extracted)
 
                 elif isinstance(binlog_event, DeleteRowsEvent):
-                    rows_saved = handle_delete_rows_event(binlog_event,
-                                                          catalog_entry,
-                                                          state,
-                                                          columns,
-                                                          rows_saved,
-                                                          time_extracted)
+                    processed_rows_events = handle_delete_rows_event(binlog_event,
+                                                                     catalog_entry,
+                                                                     state,
+                                                                     columns,
+                                                                     processed_rows_events,
+                                                                     time_extracted)
                 else:
                     LOGGER.debug("Skipping event for table %s.%s as it is not an INSERT, UPDATE, or DELETE",
                                  binlog_event.schema,
                                  binlog_event.table)
 
         # Update singer bookmark and send STATE message periodically
-        if ((rows_saved and rows_saved % UPDATE_BOOKMARK_PERIOD == 0) or
+        if ((processed_rows_events and processed_rows_events % UPDATE_BOOKMARK_PERIOD == 0) or
                 (events_skipped and events_skipped % UPDATE_BOOKMARK_PERIOD == 0)):
             state = update_bookmarks(state,
                                      binlog_streams_map,
                                      log_file,
-                                     log_pos)
+                                     log_pos,
+                                     gtid_pos
+                                     )
             singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))
 
-    LOGGER.info('Processed %s rows', rows_saved)
+    LOGGER.info('Processed %s rows', processed_rows_events)
 
-    # Update singer bookmark at the last time to point it the the last processed binlog event
+    # Update singer bookmark at the last time to point it the last processed binlog event
     if log_file and log_pos:
         state = update_bookmarks(state,
                                  binlog_streams_map,
                                  log_file,
-                                 log_pos)
+                                 log_pos,
+                                 gtid_pos)
+
+
+def create_binlog_stream_reader(
+        config: Dict,
+        log_file: Optional[str],
+        log_pos: Optional[int],
+        gtid_pos: Optional[str]
+) -> BinLogStreamReader:
+    """
+    Create an instance of BinlogStreamReader with the right config
+
+    Args:
+        config: dictionary of the content of tap config.json
+        log_file: binlog file name to start replication from (Optional if using gtid)
+        log_pos: binlog pos to start replication from (Optional if using gtid)
+        gtid_pos: GTID pos to start replication from (Optional if using log_file & pos)
+
+    Returns: Instance of BinlogStreamReader
+    """
+    if config.get('server_id'):
+        server_id = int(config.get('server_id'))
+        LOGGER.info("Using provided server_id=%s", server_id)
+    else:
+        server_id = random.randint(1, 2 ^ 32)  # generate random server id for this slave
+        LOGGER.info("Using randomly generated server_id=%s", server_id)
+
+    engine = config['engine']
+
+    kwargs = {
+        'connection_settings': {},
+        'pymysql_wrapper': make_connection_wrapper(config),
+        'is_mariadb': connection.MARIADB_ENGINE == engine,
+        'server_id': server_id,  # slave server ID
+        'report_slave': socket.gethostname() or 'pipelinewise',  # this is so this slave appears in SHOW SLAVE HOSTS;
+        'only_events': [WriteRowsEvent, UpdateRowsEvent, DeleteRowsEvent],
+    }
+
+    # only fetch events pertaining to the schemas in filter db.
+    if config.get('filter_db'):
+        kwargs['only_schemas'] = config['filter_db'].split(',')
+
+    if config['use_gtid']:
+
+        if not gtid_pos:
+            raise ValueError(f'gtid_pos is empty "{gtid_pos}"! Cannot start logical replication from empty gtid.')
+
+        LOGGER.info("Starting logical replication from GTID '%s' on engine '%s'", gtid_pos, engine)
+
+        # When using GTID, we want to listen in for GTID events and start from given gtid pos
+        kwargs['only_events'].extend([GtidEvent, MariadbGtidEvent])
+        kwargs['auto_position'] = gtid_pos
+
+    else:
+        if not log_file or not log_pos or log_pos < 0:
+            raise ValueError(f'log file or pos is empty ("{log_file}", "{log_pos}")! '
+                             f'Cannot start logical replication from invalid log file/pos.')
+
+        LOGGER.info("Starting logical replication from binlog file ['%s', %d]", log_file, log_pos)
+
+        # When not using GTID, we want to listen in for rotate events, and start from given log position and file
+        kwargs['only_events'].append(RotateEvent)
+        kwargs['log_file'] = log_file
+        kwargs['log_pos'] = log_pos
+        kwargs['resume_stream'] = True
+
+    return BinLogStreamReader(**kwargs)
 
 
 def sync_binlog_stream(
@@ -562,45 +802,38 @@ def sync_binlog_stream(
         binlog_streams_map: tables to stream using binlog
         state: the current state
     """
-
     for tap_stream_id in binlog_streams_map:
         common.whitelist_bookmark_keys(BOOKMARK_KEYS, tap_stream_id, state)
 
-    log_file, log_pos = calculate_bookmark(mysql_conn, binlog_streams_map, state)
+    log_file = log_pos = gtid = None
 
-    verify_log_file_exists(mysql_conn, log_file, log_pos)
-
-    if config.get('server_id'):
-        server_id = int(config.get('server_id'))
-        LOGGER.info("Using provided server_id=%s", server_id)
+    if config['use_gtid']:
+        gtid = calculate_gtid_bookmark(binlog_streams_map, state, config['engine'])
     else:
-        server_id = fetch_server_id(mysql_conn)
-        LOGGER.info("No server_id provided, will use global server_id=%s", server_id)
+        log_file, log_pos = calculate_bookmark(mysql_conn, binlog_streams_map, state)
 
-    connection_wrapper = make_connection_wrapper(config)
     reader = None
-    try:
-        reader = BinLogStreamReader(
-            connection_settings={},
-            server_id=server_id,
-            slave_uuid=f'pipelinewise-slave-{server_id}',
-            log_file=log_file,
-            log_pos=log_pos,
-            resume_stream=True,
-            only_events=[RotateEvent, WriteRowsEvent, UpdateRowsEvent, DeleteRowsEvent],
-            pymysql_wrapper=connection_wrapper
-        )
 
-        LOGGER.info("Starting binlog replication with log_file=%s, log_pos=%s", log_file, log_pos)
+    try:
+        reader = create_binlog_stream_reader(config, log_file, log_pos, gtid)
 
         end_log_file, end_log_pos = fetch_current_log_file_and_pos(mysql_conn)
         LOGGER.info('Current Master binlog file and pos: %s %s', end_log_file, end_log_pos)
 
         _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config, end_log_file, end_log_pos)
 
+    except pymysql.err.OperationalError as ex:
+        if ex.args[0] == 1236:
+            LOGGER.error('Cannot resume logical replication from given GTID %s! This GTID might date back to before '
+                         'the new primary has been setup, connect to old primary and consume all binlog events to get '
+                         'a newer GTID then switch back.', gtid)
+
+        raise
+
     finally:
         # BinLogStreamReader doesn't implement the `with` methods
         # So, try/finally will close the chain from the top
-        reader.close()
+        if reader:
+            reader.close()
 
     singer.write_message(singer.StateMessage(value=copy.deepcopy(state)))

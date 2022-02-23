@@ -13,14 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [ 3.6, 3.7, 3.8 ]
+        python-version: [ 3.7, 3.8 ]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-
-      - name: Build Mysql test container
-        run: docker-compose up -d --build test_mysql
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
@@ -36,14 +33,73 @@ jobs:
       - name: Unit Tests
         run: make unit_test
 
+
+  integration_test_mariadb:
+    name: Intergation tests with MariaDB database
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        python-version: [ 3.7, 3.8 ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Build db test container
+        run: docker-compose up -d mariadb_server1
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Setup virtual environment
+        run: make venv
+
       - name: Integration Tests
         env:
           TAP_MYSQL_PORT: 3306
-          TAP_MYSQL_USER: root
-          TAP_MYSQL_PASSWORD: my-secret-passwd
+          TAP_MYSQL_USER: replication_user
+          TAP_MYSQL_PASSWORD: secret123passwd
           TAP_MYSQL_HOST: localhost
+          TAP_MYSQL_ENGINE: mariadb
           LOGGING_CONF_FILE: ./sample_logging.conf
         run: make integration_test
 
-      - name: Shutdown Mysql test container
-        run: docker-compose down
+      - name: Shutdown db test container
+        run: docker-compose down mariadb_server1
+
+  integration_test_mysql:
+    name: Intergation tests with Mysql database
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        python-version: [ 3.7, 3.8 ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Build db test container
+        run: docker-compose up -d mysql_server
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Setup virtual environment
+        run: make venv
+
+      - name: Integration Tests
+        env:
+          TAP_MYSQL_PORT: 3307
+          TAP_MYSQL_USER: replication_user
+          TAP_MYSQL_PASSWORD: secret123passwd
+          TAP_MYSQL_HOST: localhost
+          TAP_MYSQL_ENGINE: mysql
+          LOGGING_CONF_FILE: ./sample_logging.conf
+        run: make integration_test
+
+      - name: Shutdown db test container
+        run: docker-compose down mysql_server
