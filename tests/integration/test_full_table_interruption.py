@@ -111,18 +111,20 @@ class BinlogInterruption(unittest.TestCase):
         SINGER_MESSAGES.clear()
 
     def test_table_2_interrupted(self):
+        """Test that a binlog table correctly recovers from an interruption in the initial table sync.
+
+        When using LOG_BASED replication, an inital FULL_TABLE load is first performed.
+        If that full-table load fails, we should re-run it.
+        """
         singer.write_message = singer_write_message_no_table_2
 
         state = {}
-        failed_syncing_table_2 = False
 
         try:
             tap_mysql.do_sync(self.conn, test_utils.get_db_config(), self.catalog, state)
+            self.fail('Expected a simulated exception.')
         except Exception as ex:
-            if str(ex) == 'simulated exception':
-                failed_syncing_table_2 = True
-
-        self.assertTrue(failed_syncing_table_2)
+            self.assertEqual(str(ex), 'simulated exception')
 
         record_messages_1 = [[m.stream, m.record] for m in SINGER_MESSAGES
                              if isinstance(m, singer.RecordMessage)]
@@ -146,9 +148,6 @@ class BinlogInterruption(unittest.TestCase):
         table_2_version = table_2_bookmark['version']
         self.assertIsNotNone(table_2_version)
 
-        self.assertEqual(table_2_bookmark['max_pk_values'], {'id': 3})
-        self.assertEqual(table_2_bookmark['last_pk_fetched'], {'id': 1})
-
         self.assertIsNotNone(table_2_bookmark.get('log_file'))
         self.assertIsNotNone(table_2_bookmark.get('log_pos'))
 
@@ -164,12 +163,14 @@ class BinlogInterruption(unittest.TestCase):
         record_messages_2 = [[m.stream, m.record] for m in SINGER_MESSAGES
                              if isinstance(m, singer.RecordMessage)]
 
-        self.assertEqual(record_messages_2,
-                         [['tap_mysql_test-table_2', {'id': 2, 'bar': 'def', 'foo': 200}],
-                          ['tap_mysql_test-table_2', {'id': 3, 'bar': 'abc', 'foo': 100}],
-                          ['tap_mysql_test-table_1', {'id': 1, 'bar': 'abc', 'foo': 100}],
-                          ['tap_mysql_test-table_1', {'id': 2, 'bar': 'def', 'foo': 200}],
-                          ['tap_mysql_test-table_1', {'id': 3, 'bar': 'ghi', 'foo': 300}]])
+        self.assertEqual(record_messages_2, [
+            ['tap_mysql_test-table_1', {'id': 1, 'bar': 'abc', 'foo': 100}],
+            ['tap_mysql_test-table_1', {'id': 2, 'bar': 'def', 'foo': 200}],
+            ['tap_mysql_test-table_1', {'id': 3, 'bar': 'ghi', 'foo': 300}],
+            ['tap_mysql_test-table_2', {'id': 1, 'bar': 'ghi', 'foo': 300}],
+            ['tap_mysql_test-table_2', {'id': 2, 'bar': 'def', 'foo': 200}],
+            ['tap_mysql_test-table_2', {'id': 3, 'bar': 'abc', 'foo': 100}],
+        ])
 
         self.assertIsNone(state['currently_syncing'])
 
@@ -205,12 +206,13 @@ class BinlogInterruption(unittest.TestCase):
         record_messages_3 = [[m.stream, m.record] for m in SINGER_MESSAGES
                              if isinstance(m, singer.RecordMessage)]
 
-        self.assertEqual(record_messages_3,
-                         [['tap_mysql_test-table_1', {'id': 1, 'bar': 'abc', 'foo': 100}],
-                          ['tap_mysql_test-table_1', {'id': 2, 'bar': 'def', 'foo': 200}],
-                          ['tap_mysql_test-table_1', {'id': 3, 'bar': 'ghi', 'foo': 300}],
-                          ['tap_mysql_test-table_2', {'id': 4, 'bar': 'jkl', 'foo': 400}],
-                          ['tap_mysql_test-table_2', {'id': 5, 'bar': 'mno', 'foo': 500}]])
+        self.assertEqual(record_messages_3, [
+            ['tap_mysql_test-table_1', {'id': 1, 'bar': 'abc', 'foo': 100}],
+            ['tap_mysql_test-table_1', {'id': 2, 'bar': 'def', 'foo': 200}],
+            ['tap_mysql_test-table_1', {'id': 3, 'bar': 'ghi', 'foo': 300}],
+            ['tap_mysql_test-table_2', {'id': 4, 'bar': 'jkl', 'foo': 400}],
+            ['tap_mysql_test-table_2', {'id': 5, 'bar': 'mno', 'foo': 500}],
+        ])
 
         self.assertIsNone(state['currently_syncing'])
 
@@ -284,12 +286,14 @@ class FullTableInterruption(unittest.TestCase):
         self.assertFalse(failed_syncing_table_2)
 
         record_messages_2 = [[m.stream, m.record] for m in SINGER_MESSAGES if isinstance(m, singer.RecordMessage)]
-        self.assertEqual(record_messages_2,
-                         [['tap_mysql_test-table_2', {'id': 2, 'bar': 'def', 'foo': 200}],
-                          ['tap_mysql_test-table_2', {'id': 3, 'bar': 'abc', 'foo': 100}],
-                          ['tap_mysql_test-table_1', {'id': 1, 'bar': 'abc', 'foo': 100}],
-                          ['tap_mysql_test-table_1', {'id': 2, 'bar': 'def', 'foo': 200}],
-                          ['tap_mysql_test-table_1', {'id': 3, 'bar': 'ghi', 'foo': 300}]])
+        self.assertEqual(record_messages_2, [
+            ['tap_mysql_test-table_1', {'id': 1, 'bar': 'abc', 'foo': 100}],
+            ['tap_mysql_test-table_1', {'id': 2, 'bar': 'def', 'foo': 200}],
+            ['tap_mysql_test-table_1', {'id': 3, 'bar': 'ghi', 'foo': 300}],
+            ['tap_mysql_test-table_2', {'id': 1, 'bar': 'ghi', 'foo': 300}],
+            ['tap_mysql_test-table_2', {'id': 2, 'bar': 'def', 'foo': 200}],
+            ['tap_mysql_test-table_2', {'id': 3, 'bar': 'abc', 'foo': 100}],
+        ])
 
         expected_state_2 = {
             'currently_syncing': None,

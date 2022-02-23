@@ -57,19 +57,41 @@ def log_engine(mysql_conn, catalog_entry):
 
 
 def is_valid_currently_syncing_stream(selected_stream, state):
+    """Determine if the selected stream, marked as "currently syncing", is valid to continue incremental processing."""
     stream_metadata = metadata.to_map(selected_stream.metadata)
     replication_method = stream_metadata.get((), {}).get('replication-method')
 
-    if replication_method != 'LOG_BASED':
+    # It's never valid to be "currently syncing" a FULL_TABLE replication stream.
+    # These are always sync'd from the beginning.
+    if replication_method == 'FULL_TABLE':
+        return False
+
+    # It's always valid to be "currently syncing" an INCREMENTAL replication stream.
+    # These support retrying based on the replication key.
+    if replication_method == 'INCREMENTAL':
         return True
 
-    if replication_method == 'LOG_BASED' and binlog_stream_requires_historical(selected_stream, state):
+    # If we're doing LOG_BASED replication, and the stream is "currently syncing",
+    # then we must have run a sync previously.
+    # If we still require historical data, then the initial sync must have failed,
+    # in which case we cannot continue the current sync and must start over with a fresh table scan.
+    if replication_method == 'LOG_BASED':
+        if binlog_stream_requires_historical(selected_stream, state):
+            return False
+
         return True
 
     return False
 
 
 def binlog_stream_requires_historical(catalog_entry, state):
+    """Check if the binlog stream has already run a FULL_TABLE sync to load historical state.
+
+    By default the LOG_BASED replication strategy will run a FULL_TABLE scan first,
+    to sweep all historical records. When this succeeds, the `initial_full_table_complete`
+    bookmark will be written. If that bookmark hasn't been written to the state,
+    then we need to load historical data.
+    """
     log_file = singer.get_bookmark(state,
                                    catalog_entry.tap_stream_id,
                                    'log_file')
@@ -78,15 +100,11 @@ def binlog_stream_requires_historical(catalog_entry, state):
                                   catalog_entry.tap_stream_id,
                                   'log_pos')
 
-    max_pk_values = singer.get_bookmark(state,
-                                        catalog_entry.tap_stream_id,
-                                        'max_pk_values')
+    initial_full_table_complete = singer.get_bookmark(state,
+                                                      catalog_entry.tap_stream_id,
+                                                      'initial_binlog_complete')
 
-    last_pk_fetched = singer.get_bookmark(state,
-                                          catalog_entry.tap_stream_id,
-                                          'last_pk_fetched')
-
-    if (log_file and log_pos) and (not max_pk_values and not last_pk_fetched):
+    if log_file and log_pos and initial_full_table_complete:
         return False
 
     return True
@@ -137,11 +155,19 @@ def get_non_binlog_streams(mysql_conn, catalog, config, state):
                 raise Exception(
                     f"Unable to replicate stream({stream.stream}) with binlog because it is a view.")
 
-            LOGGER.info("LOG_BASED stream %s will resume its historical sync", stream.tap_stream_id)
+            LOGGER.info("LOG_BASED stream %s requires a full historical sync", stream.tap_stream_id)
 
+            streams_without_state.append(stream)
+        elif stream_state and replication_method == 'INCREMENTAL':
             streams_with_state.append(stream)
-        elif stream_state and replication_method != 'LOG_BASED':
-            streams_with_state.append(stream)
+        elif stream_state and replication_method == 'FULL_TABLE':
+            # The Singer spec requires us to do a full table sync
+            LOGGER.warning(
+                "FULL_TABLE stream %s had previous state. "
+                "This state is being ignored and a full table sync is being performed.",
+                stream.tap_stream_id
+            )
+            streams_without_state.append(stream)
 
     # If the state says we were in the middle of processing a stream, skip
     # to that stream. Then process streams without prior state and finally
@@ -152,11 +178,13 @@ def get_non_binlog_streams(mysql_conn, catalog, config, state):
     ordered_streams = streams_without_state + streams_with_state
 
     if currently_syncing:
-        currently_syncing_stream = list(filter(
-            lambda s: s.tap_stream_id == currently_syncing and is_valid_currently_syncing_stream(s, state),
-            streams_with_state))
-
-        non_currently_syncing_streams = list(filter(lambda s: s.tap_stream_id != currently_syncing, ordered_streams))
+        currently_syncing_stream = []
+        non_currently_syncing_streams = []
+        for stream in ordered_streams:
+            if stream.tap_stream_id == currently_syncing and is_valid_currently_syncing_stream(stream, state):
+                currently_syncing_stream.append(stream)
+            else:
+                non_currently_syncing_streams.append(stream)
 
         streams_to_sync = currently_syncing_stream + non_currently_syncing_streams
     else:
@@ -208,66 +236,51 @@ def do_sync_historical_binlog(mysql_conn, catalog_entry, state, columns):
     if is_view:
         raise Exception(f"Unable to replicate stream({catalog_entry.stream}) with binlog because it is a view.")
 
-    log_file = singer.get_bookmark(state,
-                                   catalog_entry.tap_stream_id,
-                                   'log_file')
-
-    log_pos = singer.get_bookmark(state,
-                                  catalog_entry.tap_stream_id,
-                                  'log_pos')
-
-    max_pk_values = singer.get_bookmark(state,
-                                        catalog_entry.tap_stream_id,
-                                        'max_pk_values')
-
     write_schema_message(catalog_entry)
 
     stream_version = common.get_stream_version(catalog_entry.tap_stream_id, state)
 
-    if log_file and log_pos and max_pk_values:
-        LOGGER.info("Resuming initial full table sync for LOG_BASED stream %s", catalog_entry.tap_stream_id)
+    LOGGER.info("Performing initial full table sync for LOG_BASED stream %s", catalog_entry.tap_stream_id)
+
+    state = singer.write_bookmark(state,
+                                  catalog_entry.tap_stream_id,
+                                  'initial_binlog_complete',
+                                  False)
+
+    current_log_file, current_log_pos = binlog.fetch_current_log_file_and_pos(mysql_conn)
+    state = singer.write_bookmark(state,
+                                  catalog_entry.tap_stream_id,
+                                  'version',
+                                  stream_version)
+
+    if full_table.pks_are_auto_incrementing(mysql_conn, catalog_entry):
+        # We must save log_file and log_pos across FULL_TABLE syncs when using
+        # an incrementing PK
+        state = singer.write_bookmark(state,
+                                      catalog_entry.tap_stream_id,
+                                      'log_file',
+                                      current_log_file)
+
+        state = singer.write_bookmark(state,
+                                      catalog_entry.tap_stream_id,
+                                      'log_pos',
+                                      current_log_pos)
+
         full_table.sync_table(mysql_conn, catalog_entry, state, columns, stream_version)
 
     else:
-        LOGGER.info("Performing initial full table sync for LOG_BASED stream %s", catalog_entry.tap_stream_id)
+        full_table.sync_table(mysql_conn, catalog_entry, state, columns, stream_version)
+        state = singer.write_bookmark(state,
+                                      catalog_entry.tap_stream_id,
+                                      'log_file',
+                                      current_log_file)
 
         state = singer.write_bookmark(state,
                                       catalog_entry.tap_stream_id,
-                                      'initial_binlog_complete',
-                                      False)
+                                      'log_pos',
+                                      current_log_pos)
 
-        current_log_file, current_log_pos = binlog.fetch_current_log_file_and_pos(mysql_conn)
-        state = singer.write_bookmark(state,
-                                      catalog_entry.tap_stream_id,
-                                      'version',
-                                      stream_version)
-
-        if full_table.pks_are_auto_incrementing(mysql_conn, catalog_entry):
-            # We must save log_file and log_pos across FULL_TABLE syncs when using
-            # an incrementing PK
-            state = singer.write_bookmark(state,
-                                          catalog_entry.tap_stream_id,
-                                          'log_file',
-                                          current_log_file)
-
-            state = singer.write_bookmark(state,
-                                          catalog_entry.tap_stream_id,
-                                          'log_pos',
-                                          current_log_pos)
-
-            full_table.sync_table(mysql_conn, catalog_entry, state, columns, stream_version)
-
-        else:
-            full_table.sync_table(mysql_conn, catalog_entry, state, columns, stream_version)
-            state = singer.write_bookmark(state,
-                                          catalog_entry.tap_stream_id,
-                                          'log_file',
-                                          current_log_file)
-
-            state = singer.write_bookmark(state,
-                                          catalog_entry.tap_stream_id,
-                                          'log_pos',
-                                          current_log_pos)
+    singer.write_bookmark(state, catalog_entry.tap_stream_id, 'initial_binlog_complete', True)
 
 
 def do_sync_full_table(mysql_conn, catalog_entry, state, columns):

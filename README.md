@@ -432,6 +432,12 @@ GRANT ALL PRIVILEGES ON tap_mysql_test.* TO <mysql-user>;
 
 **Note**: The user and password can be anything but the database name needs to be `tap_mysql_test`.
 
+You can get a simple preconfigured test database by using the provided docker-compose file:
+
+```bash
+docker-compose up
+```
+
 2. Define the environment variables that are required to run the tests:
 ```
   export TAP_MYSQL_HOST=<mysql-host>
