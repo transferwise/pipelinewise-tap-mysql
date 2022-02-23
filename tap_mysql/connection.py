@@ -42,8 +42,8 @@ def run_session_sqls(connection):
         for sql in session_sqls:
             try:
                 run_sql(connection, sql)
-            except pymysql.err.InternalError:
-                warnings.append(f'Could not set session variable: {sql}')
+            except pymysql.err.InternalError as exc:
+                warnings.append(f'Could not set session variable `{sql}`: {exc}')
 
     if warnings:
         LOGGER.warning('Encountered non-fatal errors when configuring session that could impact performance:')
