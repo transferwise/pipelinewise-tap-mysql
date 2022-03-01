@@ -318,8 +318,11 @@ def calculate_gtid_bookmark(
 
         min_gtid = _find_gtid_by_binlog_coordinates(mysql_conn, log_file, log_pos)
 
-    LOGGER.info('The earliest bookmarked GTID found in the state is "%s", and will be used to resume replication',
-                min_gtid)
+        LOGGER.info('The inferred GTID is "%s", it will be used to resume replication',
+                    min_gtid)
+    else:
+        LOGGER.info('The earliest bookmarked GTID found in the state is "%s", and will be used to resume replication',
+                    min_gtid)
 
     return min_gtid
 
