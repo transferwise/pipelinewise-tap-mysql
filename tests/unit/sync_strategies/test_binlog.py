@@ -1979,11 +1979,57 @@ class TestBinlogSyncStrategy(TestCase):
             }
         }
 
-        result = binlog.calculate_gtid_bookmark(binlog_streams, state, connection.MARIADB_ENGINE)
+        mysql_conn = Mock(spec_set=MySQLConnection)
+
+        result = binlog.calculate_gtid_bookmark(mysql_conn, binlog_streams, state, connection.MARIADB_ENGINE)
 
         self.assertEqual(result, '0-20-12')
 
-    def test_calculate_gtid_bookmark_for_mariadb_no_gtid_found_expect_exception(self):
+    @patch('tap_mysql.sync_strategies.binlog.connect_with_backoff')
+    def test_calculate_gtid_bookmark_for_mariadb_no_gtid_found_would_infer_from_binlog(self, connect_with_backoff):
+
+        binlog_streams = {
+            'stream1': {'schema': {}},
+            'stream2': {'schema': {}},
+            'stream3': {'schema': {}},
+        }
+
+        state = {
+            'bookmarks': {
+                'stream1': {'log_file': 'binlog.040', 'log_pos': 138},
+                'stream2': {'log_file': 'binlog.040', 'log_pos': 50},
+                'stream3': {'log_file': 'binlog.032', 'log_pos': 14},
+            }
+        }
+        mysql_con = MagicMock(spec_set=MySQLConnection).return_value
+        cur_mock = MagicMock(spec_set=Cursor).return_value
+        cur_mock.__enter__.return_value.fetchone.return_value = [
+            ['0-4-222'],
+        ]
+        cur_mock.__enter__.return_value.fetchall.return_value = [
+            ('binlog.030',),
+            ('binlog.031',),
+            ('binlog.032',),
+            ('binlog.033',),
+            ('binlog.034',),
+            ('binlog.040',),
+            ('binlog.041',),
+        ]
+
+        mysql_con.__enter__.return_value.cursor.return_value = cur_mock
+
+        connect_with_backoff.return_value = mysql_con
+
+        result = binlog.calculate_gtid_bookmark(mysql_con, binlog_streams, state, connection.MARIADB_ENGINE)
+
+        cur_mock.__enter__.return_value.execute.assert_has_calls(
+            [
+                call('SHOW BINARY LOGS'),
+                call("select BINLOG_GTID_POS('binlog.032', 14);"),
+            ]
+        )
+
+    def test_calculate_gtid_bookmark_for_mariadb_no_gtid_nor_binlog_found_expect_exception(self):
 
         binlog_streams = {
             'stream1': {'schema': {}},
@@ -1995,9 +2041,10 @@ class TestBinlogSyncStrategy(TestCase):
             'bookmarks': {
             }
         }
+        mysql_conn = Mock(spec_set=MySQLConnection)
 
         with self.assertRaises(Exception) as ex:
-            binlog.calculate_gtid_bookmark(binlog_streams, state, connection.MARIADB_ENGINE)
+            binlog.calculate_gtid_bookmark(mysql_conn, binlog_streams, state, connection.MARIADB_ENGINE)
 
             self.assertEqual("Couldn't find any gtid in state bookmarks to resume logical replication", str(ex))
 
@@ -2020,8 +2067,8 @@ class TestBinlogSyncStrategy(TestCase):
                 'stream5': {},
             }
         }
-
-        result = binlog.calculate_gtid_bookmark(binlog_streams, state, connection.MYSQL_ENGINE)
+        mysql_conn = Mock(spec_set=MySQLConnection)
+        result = binlog.calculate_gtid_bookmark(mysql_conn, binlog_streams, state, connection.MYSQL_ENGINE)
 
         self.assertEqual(result, '3E11FA47-71CA-11E1-9E33-C80AA9429562:1-2')
 
@@ -2037,8 +2084,9 @@ class TestBinlogSyncStrategy(TestCase):
             'bookmarks': {
             }
         }
+        mysql_conn = Mock(spec_set=MySQLConnection)
 
         with self.assertRaises(Exception) as ex:
-            binlog.calculate_gtid_bookmark(binlog_streams, state, connection.MYSQL_ENGINE)
+            binlog.calculate_gtid_bookmark(mysql_conn, binlog_streams, state, connection.MYSQL_ENGINE)
 
             self.assertEqual("Couldn't find any gtid in state bookmarks to resume logical replication", str(ex))
