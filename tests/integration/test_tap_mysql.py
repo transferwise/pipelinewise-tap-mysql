@@ -721,9 +721,12 @@ class TestBinlogReplication(unittest.TestCase):
                     ctime time, 
                     cjson json)
                 """)
-                cursor.execute('INSERT INTO binlog_1 (id, updated, created_date) VALUES (1, \'2017-06-01\', current_date())')
-                cursor.execute('INSERT INTO binlog_1 (id, updated, created_date) VALUES (2, \'2017-06-20\', current_date())')
-                cursor.execute('INSERT INTO binlog_1 (id, updated, created_date) VALUES (3, \'2017-09-22\', current_date())')
+                cursor.execute(
+                    'INSERT INTO binlog_1 (id, updated, created_date) VALUES (1, \'2017-06-01\', current_date())')
+                cursor.execute(
+                    'INSERT INTO binlog_1 (id, updated, created_date) VALUES (2, \'2017-06-20\', current_date())')
+                cursor.execute(
+                    'INSERT INTO binlog_1 (id, updated, created_date) VALUES (3, \'2017-09-22\', current_date())')
                 cursor.execute('INSERT INTO binlog_2 (id, updated, ctime, cjson) VALUES (1, \'2017-10-22\', '
                                'current_time(), \'[{"key1": "A", "key2": ["B", 2], "key3": {}}]\')')
                 cursor.execute('INSERT INTO binlog_2 (id, updated, ctime, cjson) VALUES (2, \'2017-11-10\', '
@@ -850,10 +853,8 @@ class TestBinlogReplication(unittest.TestCase):
             }
         }
 
-        expected_exception_message = "Unable to replicate stream({}) with binlog because log file {} does not exist.".format(
-            stream,
-            log_file
-        )
+        expected_exception_message = "Unable to replicate binlog stream because the following binary log(s) no " \
+                                     "longer exist: {}".format(log_file)
 
         with self.assertRaises(Exception) as context:
             tap_mysql.do_sync(self.conn, {}, self.catalog, state)
@@ -1094,10 +1095,11 @@ class TestBinlogReplication(unittest.TestCase):
         config['use_gtid'] = True
         config['engine'] = engine
 
-        with self.assertRaises(Exception) as ex:
+        with self.assertRaises(Exception) as context:
             tap_mysql.do_sync(self.conn, config, self.catalog, self.state)
 
-        self.assertEqual("Couldn't find any gtid in state bookmarks to resume logical replication", str(ex))
+        self.assertEqual("Couldn't find any gtid in state bookmarks to resume logical replication",
+                         str(context.exception))
 
     def test_binlog_stream_switching_from_binlog_to_gtid_with_mariadb_success(self):
         global SINGER_MESSAGES
@@ -1145,11 +1147,11 @@ class TestBinlogReplication(unittest.TestCase):
             ('tap_mysql_test-binlog_2', 2, False),
             ('tap_mysql_test-binlog_1', 2, True),
             ('tap_mysql_test-binlog_2', 1, True),
-                          ],
-                         [(m.stream,
-                           m.record['id'],
-                           m.record.get(binlog.SDC_DELETED_AT) is not None)
-                          for m in record_messages])
+        ],
+            [(m.stream,
+              m.record['id'],
+              m.record.get(binlog.SDC_DELETED_AT) is not None)
+             for m in record_messages])
 
         self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_1', 'log_file'))
         self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_1', 'log_pos'))

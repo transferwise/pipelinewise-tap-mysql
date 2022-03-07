@@ -7,7 +7,7 @@ import os
 from collections import namedtuple
 from typing import Dict
 from unittest import TestCase
-from unittest.mock import patch, Mock, call, MagicMock
+from unittest.mock import patch, Mock, call, MagicMock, PropertyMock
 
 from pymysql import InternalError
 from pymysql.cursors import Cursor
@@ -1670,10 +1670,11 @@ class TestBinlogSyncStrategy(TestCase):
 
         connect_with_backoff.return_value = mysql_con
 
-        with self.assertRaises(Exception) as ex:
+        with self.assertRaises(Exception) as context:
             binlog.verify_binlog_config(mysql_con)
 
-        self.assertEqual("Unable to replicate binlog stream because binlog_row_image is not set to 'FULL': Not-FULL.", str(ex))
+        self.assertEqual("Unable to replicate binlog stream because binlog_row_image is not set to 'FULL': "
+                         "Not-FULL.", str(context.exception))
 
         connect_with_backoff.assert_called_with(mysql_con)
         cur_mock.__enter__.return_value.execute.assert_has_calls(
@@ -1697,10 +1698,11 @@ class TestBinlogSyncStrategy(TestCase):
 
         connect_with_backoff.return_value = mysql_con
 
-        with self.assertRaises(Exception) as ex:
+        with self.assertRaises(Exception) as context:
             binlog.verify_binlog_config(mysql_con)
 
-        self.assertEqual("Unable to replicate binlog stream because binlog_format is not set to 'ROW': Not-ROW.", str(ex))
+        self.assertEqual("Unable to replicate binlog stream because binlog_format is not set to 'ROW': Not-ROW.",
+                         str(context.exception))
 
         connect_with_backoff.assert_called_with(mysql_con)
         cur_mock.__enter__.return_value.execute.assert_has_calls(
@@ -1728,13 +1730,13 @@ class TestBinlogSyncStrategy(TestCase):
 
         connect_with_backoff.return_value = mysql_con
 
-        with self.assertRaises(Exception) as ex:
+        with self.assertRaises(Exception) as context:
             binlog.verify_binlog_config(mysql_con)
 
         self.assertEqual("Unable to replicate binlog stream because binlog_row_image "
                          "system variable does not exist. MySQL version must be at "
                          "least 5.6.2 to use binlog replication.",
-                         str(ex))
+                         str(context.exception))
 
         connect_with_backoff.assert_called_with(mysql_con)
         cur_mock.__enter__.return_value.execute.assert_has_calls(
@@ -1781,10 +1783,10 @@ class TestBinlogSyncStrategy(TestCase):
 
         connect_with_backoff.return_value = mysql_con
 
-        with self.assertRaises(Exception) as ex:
+        with self.assertRaises(Exception) as context:
             binlog.verify_gtid_config(mysql_con)
 
-        self.assertEqual("Unable to replicate binlog stream because GTID mode is not enabled.", str(ex))
+        self.assertEqual("Unable to replicate binlog stream because GTID mode is not enabled.", str(context.exception))
 
         connect_with_backoff.assert_called_with(mysql_con)
         cur_mock.__enter__.return_value.execute.assert_has_calls(
@@ -1828,10 +1830,10 @@ class TestBinlogSyncStrategy(TestCase):
 
         connect_with_backoff.return_value = mysql_con
 
-        with self.assertRaises(Exception) as ex:
+        with self.assertRaises(Exception) as context:
             binlog.fetch_current_log_file_and_pos(mysql_con)
 
-        self.assertEqual('MySQL binary logging is not enabled.', str(ex))
+        self.assertEqual('MySQL binary logging is not enabled.', str(context.exception))
 
         connect_with_backoff.assert_called_with(mysql_con)
         cur_mock.__enter__.return_value.execute.assert_has_calls(
@@ -1912,10 +1914,10 @@ class TestBinlogSyncStrategy(TestCase):
         connect_with_backoff.return_value = mysql_con
         fetch_server_id.return_value = 2
 
-        with self.assertRaises(Exception) as ex:
+        with self.assertRaises(Exception) as context:
             binlog.fetch_current_gtid_pos(mysql_con, connection.MARIADB_ENGINE)
 
-        self.assertIn('No suitable GTID was found for server', str(ex))
+        self.assertIn('GTID is not present on this server!', str(context.exception))
 
         connect_with_backoff.assert_called_with(mysql_con)
         fetch_server_id.assert_called_with(mysql_con)
@@ -1943,10 +1945,10 @@ class TestBinlogSyncStrategy(TestCase):
 
         fetch_server_id.return_value = 2
 
-        with self.assertRaises(Exception) as ex:
+        with self.assertRaises(Exception) as context:
             binlog.fetch_current_gtid_pos(mysql_con, connection.MARIADB_ENGINE)
 
-        self.assertIn('No suitable GTID was found for server', str(ex))
+        self.assertIn('No suitable GTID was found for server', str(context.exception))
 
         connect_with_backoff.assert_called_with(mysql_con)
         fetch_server_id.assert_called_with(mysql_con)
@@ -2025,7 +2027,11 @@ class TestBinlogSyncStrategy(TestCase):
             ]
         )
 
-    def test_calculate_gtid_bookmark_for_mariadb_no_gtid_nor_binlog_found_expect_exception(self):
+    @patch('tap_mysql.sync_strategies.binlog.calculate_bookmark')
+    @patch('tap_mysql.sync_strategies.binlog.connect_with_backoff')
+    def test_calculate_gtid_bookmark_for_mariadb_no_gtid_nor_binlog_found_expect_exception(self,
+                                                                                           connect_with_backoff,
+                                                                                           calculate_bookmark):
 
         binlog_streams = {
             'stream1': {'schema': {}},
@@ -2034,15 +2040,17 @@ class TestBinlogSyncStrategy(TestCase):
         }
 
         state = {
-            'bookmarks': {
-            }
+            'bookmarks': {}
         }
         mysql_conn = Mock(spec_set=MySQLConnection)
+        connect_with_backoff.return_value = mysql_conn
+        calculate_bookmark.return_value = None, None
 
-        with self.assertRaises(Exception) as ex:
+        with self.assertRaises(Exception) as context:
             binlog.calculate_gtid_bookmark(mysql_conn, binlog_streams, state, connection.MARIADB_ENGINE)
 
-        self.assertEqual("Couldn't find any gtid in state bookmarks to resume logical replication", str(ex))
+        self.assertEqual("No binlog coordinates in state to infer gtid position! Cannot resume logical replication",
+                         str(context.exception))
 
     def test_calculate_gtid_bookmark_for_mysql_returns_earliest(self):
 
@@ -2077,12 +2085,12 @@ class TestBinlogSyncStrategy(TestCase):
         }
 
         state = {
-            'bookmarks': {
-            }
+            'bookmarks': {}
         }
         mysql_conn = Mock(spec_set=MySQLConnection)
 
-        with self.assertRaises(Exception) as ex:
+        with self.assertRaises(Exception) as context:
             binlog.calculate_gtid_bookmark(mysql_conn, binlog_streams, state, connection.MYSQL_ENGINE)
 
-        self.assertEqual("Couldn't find any gtid in state bookmarks to resume logical replication", str(ex))
+        self.assertEqual("Couldn't find any gtid in state bookmarks to resume logical replication",
+                         str(context.exception))
