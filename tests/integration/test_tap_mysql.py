@@ -835,7 +835,7 @@ class TestBinlogReplication(unittest.TestCase):
         with self.assertRaises(Exception) as context:
             tap_mysql.do_sync(self.conn, {}, self.catalog, state)
 
-            self.assertEqual(expected_exception_message, str(context.exception))
+        self.assertEqual(expected_exception_message, str(context.exception))
 
     def test_fail_if_log_file_does_not_exist(self):
         log_file = 'chicken'
@@ -858,7 +858,7 @@ class TestBinlogReplication(unittest.TestCase):
         with self.assertRaises(Exception) as context:
             tap_mysql.do_sync(self.conn, {}, self.catalog, state)
 
-            self.assertEqual(expected_exception_message, str(context.exception))
+        self.assertEqual(expected_exception_message, str(context.exception))
 
     def test_binlog_stream(self):
         global SINGER_MESSAGES
@@ -1097,7 +1097,7 @@ class TestBinlogReplication(unittest.TestCase):
         with self.assertRaises(Exception) as ex:
             tap_mysql.do_sync(self.conn, config, self.catalog, self.state)
 
-            self.assertEqual("Couldn't find any gtid in state bookmarks to resume logical replication", str(ex))
+        self.assertEqual("Couldn't find any gtid in state bookmarks to resume logical replication", str(ex))
 
     def test_binlog_stream_switching_from_binlog_to_gtid_with_mariadb_success(self):
         global SINGER_MESSAGES
