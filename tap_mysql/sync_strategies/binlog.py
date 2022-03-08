@@ -259,6 +259,7 @@ def row_to_singer_record(catalog_entry, version, db_column_map, row, time_extrac
 
 
 def calculate_gtid_bookmark(
+        mysql_conn: MySQLConnection,
         binlog_streams_map: Dict[str, Any],
         state: Dict,
         engine: str
@@ -266,6 +267,7 @@ def calculate_gtid_bookmark(
     """
     Finds the earliest bookmarked gtid in the state
     Args:
+        mysql_conn: instance of MySqlConnection
         binlog_streams_map: dictionary of selected streams
         state: state dict with bookmarks
         engine: the DB flavor mysql/mariadb
@@ -298,14 +300,49 @@ def calculate_gtid_bookmark(
                 min_seq_no = gtid_seq_no
                 min_gtid = gtid
 
-
     if not min_gtid:
-        raise Exception("Couldn't find any gtid in state bookmarks to resume logical replication")
 
-    LOGGER.info('The earliest bookmarked GTID found in the state is "%s", and will be used to resume replication',
-                min_gtid)
+        # Mariadb has a handy sql function BINLOG_GTID_POS to infer the gtid position from given binlog coordinates so
+        # we will use that, as for mysql, there is no such thing, the only available option is using the cli utility
+        # mysqlbinlog which we deemed as not nice to use, and we don't wanna make it a system requirement of this tap,
+        # hence, this functionality of inferring gtid is not implemented for it.
+
+        if engine != connection.MARIADB_ENGINE:
+            raise Exception("Couldn't find any gtid in state bookmarks to resume logical replication")
+
+        LOGGER.info("Couldn't find a gtid in state, will try to infer one from binlog coordinates if they exist ..")
+        log_file, log_pos = calculate_bookmark(mysql_conn, binlog_streams_map, state)
+
+        if not (log_file and log_pos):
+            raise Exception("No binlog coordinates in state to infer gtid position! Cannot resume logical replication")
+
+        min_gtid = _find_gtid_by_binlog_coordinates(mysql_conn, log_file, log_pos)
+
+        LOGGER.info('The inferred GTID is "%s", it will be used to resume replication',
+                    min_gtid)
+    else:
+        LOGGER.info('The earliest bookmarked GTID found in the state is "%s", and will be used to resume replication',
+                    min_gtid)
 
     return min_gtid
+
+
+def _find_gtid_by_binlog_coordinates(mysql_conn: MySQLConnection, log_file: str, log_pos: int) -> str:
+    """
+    Finds the equivalent gtid position from the given binlog file and pos.
+    This only works on MariaDB
+
+    Args:
+        mysql_conn: instance of MySQLConnection
+        log_file: a binlog file
+        log_pos: a position in the log file
+
+    Returns: gtid position
+    """
+    with connect_with_backoff(mysql_conn) as open_conn:
+        with open_conn.cursor() as cur:
+            cur.execute(f"select BINLOG_GTID_POS('{log_file}', {log_pos});")
+            return cur.fetchone()[0]
 
 
 def get_min_log_pos_per_log_file(binlog_streams_map, state) -> Dict[str, Dict]:
@@ -808,7 +845,7 @@ def sync_binlog_stream(
     log_file = log_pos = gtid = None
 
     if config['use_gtid']:
-        gtid = calculate_gtid_bookmark(binlog_streams_map, state, config['engine'])
+        gtid = calculate_gtid_bookmark(mysql_conn, binlog_streams_map, state, config['engine'])
     else:
         log_file, log_pos = calculate_bookmark(mysql_conn, binlog_streams_map, state)
 
