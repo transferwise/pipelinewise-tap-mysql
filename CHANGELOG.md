@@ -2,7 +2,7 @@
 ------------------
 * Support logical replication using GTID, for both Mariadb & MySql 
 * Log error message when session sqls fail
-* Bump depenedencies
+* Bump depenedencies to support Mysql 8
 * Migrate CI to Github Actions.
 
 1.4.3 (2021-04-09)
