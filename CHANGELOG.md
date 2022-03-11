@@ -1,3 +1,10 @@
+1.5.0 (2022-03-11)
+------------------
+* Support logical replication using GTID, for both Mariadb & MySql 
+* Log error message when session sqls fail
+* Bump depenedencies
+* Migrate CI to Github Actions.
+
 1.4.3 (2021-04-09)
 ------------------
 * Fix in LOG_BASED method: re-discovery constantly running when table has unsupported column type.
