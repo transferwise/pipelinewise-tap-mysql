@@ -290,7 +290,7 @@ def schema_for_column(column):  # pylint: disable=too-many-branches
         result.format = 'binary'
 
     elif data_type in SPATIAL_TYPES:
-        result.type = ['null', 'object']
+        result.type = ['null', 'string']
         result.format = 'spatial'
 
     else:
