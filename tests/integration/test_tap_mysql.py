@@ -8,7 +8,7 @@ import singer.metadata
 
 import tap_mysql
 import tap_mysql.discover_utils
-from tap_mysql.connection import connect_with_backoff, MySQLConnection, fetch_server_id, MYSQL_ENGINE
+from tap_mysql.connection import connect_with_backoff, MySQLConnection, fetch_server_id, MYSQL_ENGINE, MARIADB_ENGINE
 
 try:
     import tests.integration.utils as test_utils
@@ -595,7 +595,7 @@ class TestIncrementalReplication(unittest.TestCase):
                      'selected': True,
                      'table-key-properties': [],
                      'database-name': 'tap_mysql_test'
-                }},
+                 }},
                 {'breadcrumb': ('properties', 'val'), 'metadata': {'selected': True}}
             ]
 
@@ -721,9 +721,12 @@ class TestBinlogReplication(unittest.TestCase):
                     ctime time, 
                     cjson json)
                 """)
-                cursor.execute('INSERT INTO binlog_1 (id, updated, created_date) VALUES (1, \'2017-06-01\', current_date())')
-                cursor.execute('INSERT INTO binlog_1 (id, updated, created_date) VALUES (2, \'2017-06-20\', current_date())')
-                cursor.execute('INSERT INTO binlog_1 (id, updated, created_date) VALUES (3, \'2017-09-22\', current_date())')
+                cursor.execute(
+                    'INSERT INTO binlog_1 (id, updated, created_date) VALUES (1, \'2017-06-01\', current_date())')
+                cursor.execute(
+                    'INSERT INTO binlog_1 (id, updated, created_date) VALUES (2, \'2017-06-20\', current_date())')
+                cursor.execute(
+                    'INSERT INTO binlog_1 (id, updated, created_date) VALUES (3, \'2017-09-22\', current_date())')
                 cursor.execute('INSERT INTO binlog_2 (id, updated, ctime, cjson) VALUES (1, \'2017-10-22\', '
                                'current_time(), \'[{"key1": "A", "key2": ["B", 2], "key3": {}}]\')')
                 cursor.execute('INSERT INTO binlog_2 (id, updated, ctime, cjson) VALUES (2, \'2017-11-10\', '
@@ -748,7 +751,7 @@ class TestBinlogReplication(unittest.TestCase):
                      'selected': True,
                      'database-name': 'tap_mysql_test',
                      'table-key-properties': ['id']
-                }},
+                 }},
                 {'breadcrumb': ('properties', 'id'), 'metadata': {'selected': True}},
                 {'breadcrumb': ('properties', 'updated'), 'metadata': {'selected': True}}
             ]
@@ -829,13 +832,13 @@ class TestBinlogReplication(unittest.TestCase):
 
         state = {}
 
-        expected_exception_message = "Unable to replicate stream(tap_mysql_test-{}) with binlog because it is a view.".\
+        expected_exception_message = "Unable to replicate stream(tap_mysql_test-{}) with binlog because it is a view.". \
             format(self.catalog.streams[0].stream)
 
         with self.assertRaises(Exception) as context:
             tap_mysql.do_sync(self.conn, {}, self.catalog, state)
 
-            self.assertEqual(expected_exception_message, str(context.exception))
+        self.assertEqual(expected_exception_message, str(context.exception))
 
     def test_fail_if_log_file_does_not_exist(self):
         log_file = 'chicken'
@@ -850,15 +853,13 @@ class TestBinlogReplication(unittest.TestCase):
             }
         }
 
-        expected_exception_message = "Unable to replicate stream({}) with binlog because log file {} does not exist.".format(
-            stream,
-            log_file
-        )
+        expected_exception_message = "Unable to replicate binlog stream because the following binary log(s) no " \
+                                     "longer exist: {}".format(log_file)
 
         with self.assertRaises(Exception) as context:
             tap_mysql.do_sync(self.conn, {}, self.catalog, state)
 
-            self.assertEqual(expected_exception_message, str(context.exception))
+        self.assertEqual(expected_exception_message, str(context.exception))
 
     def test_binlog_stream(self):
         global SINGER_MESSAGES
@@ -927,7 +928,8 @@ class TestBinlogReplication(unittest.TestCase):
             with open_conn.cursor() as cursor:
                 cursor.execute('ALTER TABLE binlog_1 add column data blob;')
                 cursor.execute('ALTER TABLE binlog_1 add column is_cancelled boolean;')
-                cursor.execute('INSERT INTO binlog_1 (id, updated, is_cancelled, data) VALUES (2, \'2017-06-20\', true, \'blob content\')')
+                cursor.execute(
+                    'INSERT INTO binlog_1 (id, updated, is_cancelled, data) VALUES (2, \'2017-06-20\', true, \'blob content\')')
                 cursor.execute('INSERT INTO binlog_1 (id, updated, is_cancelled) VALUES (3, \'2017-09-21\', false)')
                 cursor.execute('INSERT INTO binlog_2 (id, updated) VALUES (3, \'2017-12-10\')')
                 cursor.execute('ALTER TABLE binlog_1 change column updated date_updated datetime;')
@@ -1068,6 +1070,97 @@ class TestBinlogReplication(unittest.TestCase):
         self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_2', 'log_pos'))
         self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_2', 'gtid'))
 
+    def test_binlog_stream_switching_from_binlog_to_gtid_with_mysql_fails(self):
+        global SINGER_MESSAGES
+
+        engine = os.getenv('TAP_MYSQL_ENGINE', MYSQL_ENGINE)
+
+        if engine != MYSQL_ENGINE:
+            self.skipTest('This test is only meant for Mysql flavor')
+
+        log_file, log_pos = binlog.fetch_current_log_file_and_pos(self.conn)
+
+        self.state = singer.write_bookmark(self.state,
+                                           'tap_mysql_test-binlog_1',
+                                           'log_file',
+                                           log_file)
+
+        self.state = singer.write_bookmark(self.state,
+                                           'tap_mysql_test-binlog_2',
+                                           'log_pos',
+                                           log_pos)
+
+        config = test_utils.get_db_config()
+
+        config['use_gtid'] = True
+        config['engine'] = engine
+
+        with self.assertRaises(Exception) as context:
+            tap_mysql.do_sync(self.conn, config, self.catalog, self.state)
+
+        self.assertEqual("Couldn't find any gtid in state bookmarks to resume logical replication",
+                         str(context.exception))
+
+    def test_binlog_stream_switching_from_binlog_to_gtid_with_mariadb_success(self):
+        global SINGER_MESSAGES
+
+        engine = os.getenv('TAP_MYSQL_ENGINE', MYSQL_ENGINE)
+
+        if engine != MARIADB_ENGINE:
+            self.skipTest('This test is only meant for Mariadb flavor')
+
+        config = test_utils.get_db_config()
+
+        config['use_gtid'] = True
+        config['engine'] = engine
+
+        tap_mysql.do_sync(self.conn, config, self.catalog, self.state)
+
+        record_messages = list(filter(lambda m: isinstance(m, singer.RecordMessage), SINGER_MESSAGES))
+
+        message_types = [type(m) for m in SINGER_MESSAGES]
+        self.assertEqual(message_types,
+                         [singer.StateMessage,
+                          singer.SchemaMessage,
+                          singer.SchemaMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.RecordMessage,
+                          singer.StateMessage,
+                          ])
+
+        self.assertEqual([
+            ('tap_mysql_test-binlog_1', 1, False),
+            ('tap_mysql_test-binlog_1', 2, False),
+            ('tap_mysql_test-binlog_1', 3, False),
+            ('tap_mysql_test-binlog_2', 1, False),
+            ('tap_mysql_test-binlog_2', 2, False),
+            ('tap_mysql_test-binlog_2', 3, False),
+            ('tap_mysql_test-binlog_1', 3, False),
+            ('tap_mysql_test-binlog_2', 2, False),
+            ('tap_mysql_test-binlog_1', 2, True),
+            ('tap_mysql_test-binlog_2', 1, True),
+        ],
+            [(m.stream,
+              m.record['id'],
+              m.record.get(binlog.SDC_DELETED_AT) is not None)
+             for m in record_messages])
+
+        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_1', 'log_file'))
+        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_1', 'log_pos'))
+        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_1', 'gtid'))
+
+        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_2', 'log_file'))
+        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_2', 'log_pos'))
+        self.assertIsNotNone(singer.get_bookmark(self.state, 'tap_mysql_test-binlog_2', 'gtid'))
+
 
 class TestViews(unittest.TestCase):
     def setUp(self):
@@ -1133,7 +1226,7 @@ class TestEscaping(unittest.TestCase):
                  'selected': True,
                  'table-key-properties': [],
                  'database-name': 'tap_mysql_test'
-            }},
+             }},
             {'breadcrumb': ('properties', 'b c'), 'metadata': {'selected': True}}
         ]
 
@@ -1209,7 +1302,6 @@ class TestSupportedPK(unittest.TestCase):
         self.assertEqual(primary_keys, {'good_pk_tab': ['good_pk']})
 
     def test_sync_messages_are_correct(self):
-
         self.catalog.streams[0] = test_utils.set_replication_method_and_key(self.catalog.streams[0], 'LOG_BASED', None)
         self.catalog.streams[0] = test_utils.set_selected(self.catalog.streams[0], True)
 
@@ -1360,7 +1452,6 @@ class TestBitBooleanMapping(unittest.TestCase):
         self.catalog = test_utils.discover_catalog(self.conn, {})
 
     def test_sync_messages_are_correct(self):
-
         self.catalog.streams[0] = test_utils.set_replication_method_and_key(self.catalog.streams[0], 'FULL_TABLE', None)
         self.catalog.streams[0] = test_utils.set_selected(self.catalog.streams[0], True)
 

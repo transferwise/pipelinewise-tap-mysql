@@ -64,7 +64,7 @@ jobs:
           TAP_MYSQL_HOST: localhost
           TAP_MYSQL_ENGINE: mariadb
           LOGGING_CONF_FILE: ./sample_logging.conf
-        run: make integration_test
+        run: make integration_test extra_args=--cover-min-percentage=85
 
       - name: Shutdown db test container
         run: docker-compose down mariadb_server1
@@ -99,7 +99,7 @@ jobs:
           TAP_MYSQL_HOST: localhost
           TAP_MYSQL_ENGINE: mysql
           LOGGING_CONF_FILE: ./sample_logging.conf
-        run: make integration_test
+        run: make integration_test extra_args=--cover-min-percentage=84
 
       - name: Shutdown db test container
         run: docker-compose down mysql_server

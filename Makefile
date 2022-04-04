@@ -10,8 +10,8 @@ pylint:
 
 unit_test:
 	. ./venv/bin/activate ;\
-	nosetests -c .noserc --cover-min-percentage=42 tests/unit
+	nosetests -c .noserc --cover-min-percentage=47 tests/unit $(extra_args)
 
 integration_test:
 	. ./venv/bin/activate ;\
-	nosetests -c .noserc --cover-min-percentage=85 tests/integration
+	nosetests -c .noserc tests/integration $(extra_args)
