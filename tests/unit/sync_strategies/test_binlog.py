@@ -2001,8 +2001,9 @@ class TestBinlogSyncStrategy(TestCase):
         }
         mysql_con = MagicMock(spec_set=MySQLConnection).return_value
         cur_mock = MagicMock(spec_set=Cursor).return_value
-        cur_mock.__enter__.return_value.fetchone.return_value = [
+        cur_mock.__enter__.return_value.fetchone.side_effect = [
             ['0-4-222'],
+            [4]
         ]
         cur_mock.__enter__.return_value.fetchall.return_value = [
             ('binlog.030',),
@@ -2024,8 +2025,60 @@ class TestBinlogSyncStrategy(TestCase):
             [
                 call('SHOW BINARY LOGS'),
                 call("select BINLOG_GTID_POS('binlog.032', 14);"),
+                call("SELECT @@server_id"),
             ]
         )
+
+        self.assertEqual(result, '0-4-222')
+
+    @patch('tap_mysql.sync_strategies.binlog.connect_with_backoff')
+    def test_calculate_gtid_bookmark_for_mariadb_no_gtid_found_would_infer_from_binlog_returns_many_gtids(self,
+                                                                                              connect_with_backoff):
+
+        binlog_streams = {
+            'stream1': {'schema': {}},
+            'stream2': {'schema': {}},
+            'stream3': {'schema': {}},
+        }
+
+        state = {
+            'bookmarks': {
+                'stream1': {'log_file': 'binlog.040', 'log_pos': 138},
+                'stream2': {'log_file': 'binlog.040', 'log_pos': 50},
+                'stream3': {'log_file': 'binlog.032', 'log_pos': 14},
+            }
+        }
+        mysql_con = MagicMock(spec_set=MySQLConnection).return_value
+        cur_mock = MagicMock(spec_set=Cursor).return_value
+        cur_mock.__enter__.return_value.fetchone.side_effect = [
+            ['0-4-222,,3-4,5-66-2213,6-89-7222'],
+            [89]
+        ]
+        cur_mock.__enter__.return_value.fetchall.return_value = [
+            ('binlog.030',),
+            ('binlog.031',),
+            ('binlog.032',),
+            ('binlog.033',),
+            ('binlog.034',),
+            ('binlog.040',),
+            ('binlog.041',),
+        ]
+
+        mysql_con.__enter__.return_value.cursor.return_value = cur_mock
+
+        connect_with_backoff.return_value = mysql_con
+
+        result = binlog.calculate_gtid_bookmark(mysql_con, binlog_streams, state, connection.MARIADB_ENGINE)
+
+        cur_mock.__enter__.return_value.execute.assert_has_calls(
+            [
+                call('SHOW BINARY LOGS'),
+                call("select BINLOG_GTID_POS('binlog.032', 14);"),
+                call("SELECT @@server_id"),
+            ]
+        )
+
+        self.assertEqual(result, '6-89-7222')
 
     @patch('tap_mysql.sync_strategies.binlog.calculate_bookmark')
     @patch('tap_mysql.sync_strategies.binlog.connect_with_backoff')
