@@ -347,24 +347,24 @@ def _find_gtid_by_binlog_coordinates(mysql_conn: MySQLConnection, log_file: str,
             cur.execute(f"select BINLOG_GTID_POS('{log_file}', {log_pos});")
             gtids = cur.fetchone()[0]
 
-            LOGGER.info('BINLOG_GTID_POS -> gtids: %s', gtids)
+    LOGGER.debug('BINLOG_GTID_POS returned gtids: %s', gtids)
 
-            if not gtids:
-                return None
+    if not gtids:
+        return None
 
-            server_id = str(connection.fetch_server_id(mysql_conn))
+    server_id = str(connection.fetch_server_id(mysql_conn))
 
-            gtid_to_use = None
-            for gtid in gtids.split(','):
-                gtid_parts = gtid.split('-')
+    gtid_to_use = None
+    for gtid in gtids.split(','):
+        gtid_parts = gtid.split('-')
 
-                if len(gtid_parts) != 3:
-                    continue
+        if len(gtid_parts) != 3:
+            continue
 
-                if gtid_parts[1] == server_id:
-                    gtid_to_use = gtid
+        if gtid_parts[1] == server_id:
+            gtid_to_use = gtid
 
-            return gtid_to_use
+    return gtid_to_use
 
 
 def get_min_log_pos_per_log_file(binlog_streams_map, state) -> Dict[str, Dict]:
