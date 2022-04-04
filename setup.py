@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(name='pipelinewise-tap-mysql',
-      version='1.4.3',
+      version='1.5.0',
       description='Singer.io tap for extracting data from MySQL & MariaDB - PipelineWise compatible',
       long_description=long_description,
       long_description_content_type='text/markdown',
@@ -28,7 +28,7 @@ setup(name='pipelinewise-tap-mysql',
       extras_require={
           'test': [
               'nose==1.3.*',
-              'pylint==2.12.2',
+              'pylint==2.13.2',
               'nose-cov==1.6'
           ]
       },
