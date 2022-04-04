@@ -318,6 +318,9 @@ def calculate_gtid_bookmark(
 
         min_gtid = _find_gtid_by_binlog_coordinates(mysql_conn, log_file, log_pos)
 
+        if not min_gtid:
+            raise Exception("Couldn't infer any gtid from binlog coordinates to resume logical replication")
+
         LOGGER.info('The inferred GTID is "%s", it will be used to resume replication',
                     min_gtid)
     else:
@@ -327,7 +330,7 @@ def calculate_gtid_bookmark(
     return min_gtid
 
 
-def _find_gtid_by_binlog_coordinates(mysql_conn: MySQLConnection, log_file: str, log_pos: int) -> str:
+def _find_gtid_by_binlog_coordinates(mysql_conn: MySQLConnection, log_file: str, log_pos: int) -> Optional[str]:
     """
     Finds the equivalent gtid position from the given binlog file and pos.
     This only works on MariaDB
@@ -342,7 +345,26 @@ def _find_gtid_by_binlog_coordinates(mysql_conn: MySQLConnection, log_file: str,
     with connect_with_backoff(mysql_conn) as open_conn:
         with open_conn.cursor() as cur:
             cur.execute(f"select BINLOG_GTID_POS('{log_file}', {log_pos});")
-            return cur.fetchone()[0]
+            gtids = cur.fetchone()[0]
+
+            LOGGER.info('BINLOG_GTID_POS -> gtids: %s', gtids)
+
+            if not gtids:
+                return None
+
+            server_id = str(connection.fetch_server_id(mysql_conn))
+
+            gtid_to_use = None
+            for gtid in gtids.split(','):
+                gtid_parts = gtid.split('-')
+
+                if len(gtid_parts) != 3:
+                    continue
+
+                if gtid_parts[1] == server_id:
+                    gtid_to_use = gtid
+
+            return gtid_to_use
 
 
 def get_min_log_pos_per_log_file(binlog_streams_map, state) -> Dict[str, Dict]:
