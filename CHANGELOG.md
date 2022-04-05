@@ -1,3 +1,8 @@
+1.5.1 (2022-04-04)
+------------------
+* Fix: Handle case when BINLOG_GTID_POS returns multiple comma separated GTIDs
+
+
 1.5.0 (2022-03-11)
 ------------------
 * Support logical replication using GTID, for both Mariadb & MySql 
