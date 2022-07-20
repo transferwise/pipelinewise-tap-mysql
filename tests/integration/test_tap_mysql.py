@@ -1,3 +1,4 @@
+import codecs
 import os
 import unittest
 from unittest.mock import patch
@@ -1483,3 +1484,34 @@ class TestBitBooleanMapping(unittest.TestCase):
         with connect_with_backoff(self.conn) as open_conn:
             with open_conn.cursor() as cursor:
                 cursor.execute('DROP TABLE bit_booleans_table;')
+
+class TestBinaryMapping(unittest.TestCase):
+
+    def setUp(self):
+        self.conn = test_utils.get_test_connection()
+        self.blob_data = b'hello world'
+        with connect_with_backoff(self.conn) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("CREATE TABLE binary_table(id int, c_blob blob)")
+                cursor.execute("INSERT INTO binary_table VALUES (%s, %s)", (1, self.blob_data))
+        self.catalog = test_utils.discover_catalog(self.conn, {})
+
+    def tearDown(self):
+        with connect_with_backoff(self.conn) as open_conn:
+            with open_conn.cursor() as cursor:
+                cursor.execute('DROP TABLE binary_table')
+
+    def test_sync_messages_are_correct(self):
+        self.catalog.streams[0] = test_utils.set_replication_method_and_key(self.catalog.streams[0], 'FULL_TABLE', None)
+        self.catalog.streams[0] = test_utils.set_selected(self.catalog.streams[0], True)
+
+        global SINGER_MESSAGES
+        SINGER_MESSAGES.clear()
+
+        tap_mysql.do_sync(self.conn, {}, self.catalog, {})
+
+        record_messages = list(filter(lambda m: isinstance(m, singer.RecordMessage), SINGER_MESSAGES))
+
+        self.assertEqual(len(record_messages), 1)
+        self.assertEqual([rec.record for rec in record_messages],
+                         [{'id': 1, 'c_blob': codecs.encode(self.blob_data, 'hex').decode('utf-8').upper()}])
