@@ -335,6 +335,16 @@ class TestTypeMapping(unittest.TestCase):
                           'sql-datatype': 'geometrycollection',
                           'datatype': 'geometrycollection'})
 
+    def test_blob(self):
+        actual = self.schema.properties['c_blob']
+        self.assertEqual(actual,
+                         Schema(['null', 'string'],
+                                format='binary',
+                                inclusion='available'))
+        self.assertEqual(self.get_metadata_for_column('c_blob'),
+                         {'selected-by-default': True,
+                          'sql-datatype': 'blob',
+                          'datatype': 'blob'})
 
 class TestSelectsAppropriateColumns(unittest.TestCase):
 
@@ -715,10 +725,10 @@ class TestBinlogReplication(unittest.TestCase):
                 cursor.execute('CREATE TABLE binlog_1 (id int, updated datetime, '
                                'created_date Date)')
                 cursor.execute("""
-                    CREATE TABLE binlog_2 (id int, 
-                    updated datetime, 
-                    is_good bool default False, 
-                    ctime time, 
+                    CREATE TABLE binlog_2 (id int,
+                    updated datetime,
+                    is_good bool default False,
+                    ctime time,
                     cjson json)
                 """)
                 cursor.execute(
@@ -1012,7 +1022,7 @@ class TestBinlogReplication(unittest.TestCase):
         global SINGER_MESSAGES
 
         engine = os.getenv('TAP_MYSQL_ENGINE', MYSQL_ENGINE)
-        gtid = binlog.fetch_current_gtid_pos(self.conn, os.environ['TAP_MYSQL_ENGINE'])
+        gtid = binlog.fetch_current_gtid_pos(self.conn, engine)
 
         config = test_utils.get_db_config()
         config['use_gtid'] = True
