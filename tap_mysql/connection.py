@@ -5,6 +5,7 @@ import backoff
 import pymysql
 import ssl
 import singer
+import sys
 
 from pymysql.constants import CLIENT
 
@@ -88,10 +89,15 @@ class MySQLConnection(pymysql.connections.Connection):
             "password": config["password"],
             "host": config["host"],
             "port": int(config["port"]),
-            "cursorclass": config.get("cursorclass") or pymysql.cursors.SSCursor,
             "connect_timeout": CONNECT_TIMEOUT_SECONDS,
             "charset": "utf8",
         }
+
+        # Convert the string representation of the class to the class itself
+        args['cursorclass'] = config.get('cursorclass') or pymysql.cursors.SSCursor
+        if  type(config.get('cursorclass')) == str:
+            modules = config.get('cursorclass').rsplit('.', 1)
+            args['cursorclass'] = getattr(sys.modules[modules[0]], modules[1])
 
         ssl_arg = None
 
