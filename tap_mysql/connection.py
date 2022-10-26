@@ -94,11 +94,10 @@ class MySQLConnection(pymysql.connections.Connection):
         }
 
         # Convert the string representation of the class to the class itself
-        if config.get('cursorclass'):
+        args['cursorclass'] = pymysql.cursors.SSCursor
+        if config.get('cursorclass') and type(config.get('cursorclass')) == str:
             modules = config.get('cursorclass').rsplit('.', 1)
             args['cursorclass'] = getattr(sys.modules[modules[0]], modules[1])
-        else:
-            args['cursorclass'] = pymysql.cursors.SSCursor
 
         ssl_arg = None
 
