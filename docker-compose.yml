@@ -3,7 +3,7 @@ version: '3.7'
 services:
   mariadb_server1:
     container_name: "mariadb_server1"
-    image: mariadb:10.6
+    image: mariadb:10.6.12
     volumes:
       - ./dev/init.sql:/docker-entrypoint-initdb.d/init.sql
     environment:
