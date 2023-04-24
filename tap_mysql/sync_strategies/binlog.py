@@ -817,8 +817,8 @@ def create_binlog_stream_reader(
     }
 
     # only fetch events pertaining to the schemas in filter db.
-    if config.get('filter_db'):
-        kwargs['only_schemas'] = config['filter_db'].split(',')
+    if config.get('filter_dbs'):
+        kwargs['only_schemas'] = config['filter_dbs'].split(',')
 
     if config['use_gtid']:
 
