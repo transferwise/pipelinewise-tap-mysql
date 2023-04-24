@@ -881,14 +881,6 @@ def sync_binlog_stream(
 
         _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config, end_log_file, end_log_pos)
 
-    except pymysql.err.OperationalError as ex:
-        if ex.args[0] == 1236:
-            LOGGER.error('Cannot resume logical replication from given GTID %s! This GTID might date back to before '
-                         'the new primary has been setup, connect to old primary and consume all binlog events to get '
-                         'a newer GTID then switch back.', gtid)
-
-        raise
-
     finally:
         # BinLogStreamReader doesn't implement the `with` methods
         # So, try/finally will close the chain from the top
