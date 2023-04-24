@@ -2,7 +2,9 @@ from pymysqlreplication import BinLogStreamReader
 
 
 class CustomBinlogStreamReader(BinLogStreamReader):
-
+    """
+    Custom BinLogStreamReader to override slave capabilities
+    """
     def _register_slave(self):
 
         # When replicating from Mariadb 10.6.12 using binlog coordinates, a slave capability < 4 triggers a bug in
@@ -13,4 +15,4 @@ class CustomBinlogStreamReader(BinLogStreamReader):
         cur.execute("SET @mariadb_slave_capability=4")
         cur.close()
 
-        super(CustomBinlogStreamReader, self)._register_slave()
+        super()._register_slave()
