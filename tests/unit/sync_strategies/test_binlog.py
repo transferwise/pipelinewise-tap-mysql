@@ -7,7 +7,7 @@ import os
 from collections import namedtuple
 from typing import Dict
 from unittest import TestCase
-from unittest.mock import patch, Mock, call, MagicMock, PropertyMock
+from unittest.mock import patch, Mock, call, MagicMock
 
 from pymysql import InternalError
 from pymysql.cursors import Cursor
@@ -216,7 +216,7 @@ class TestBinlogSyncStrategy(TestCase):
         with patch('tap_mysql.sync_strategies.binlog.singer.write_message') as write_msg:
             write_msg.side_effect = lambda msg: singer_messages.append(msg)
 
-            with patch('tap_mysql.sync_strategies.binlog.BinLogStreamReader',
+            with patch('tap_mysql.sync_strategies.binlog.CustomBinlogStreamReader',
                        autospec=True) as reader_mock:
                 def iter_mock(_):
                     log_files = [
@@ -996,7 +996,7 @@ class TestBinlogSyncStrategy(TestCase):
         with patch('tap_mysql.sync_strategies.binlog.singer.write_message') as write_msg:
             write_msg.side_effect = lambda msg: singer_messages.append(msg)
 
-            with patch('tap_mysql.sync_strategies.binlog.BinLogStreamReader',
+            with patch('tap_mysql.sync_strategies.binlog.CustomBinlogStreamReader',
                        autospec=True) as reader_mock:
                 def iter_mock(_):
                     log_files = [
