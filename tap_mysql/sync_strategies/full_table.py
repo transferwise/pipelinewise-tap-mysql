@@ -5,8 +5,8 @@ import singer
 
 from singer import metadata
 
-import tap_mysql.sync_strategies.binlog as binlog
-import tap_mysql.sync_strategies.common as common
+from tap_mysql.sync_strategies import binlog
+from tap_mysql.sync_strategies import common
 
 from tap_mysql.connection import connect_with_backoff
 
@@ -102,17 +102,13 @@ def generate_pk_clause(catalog_entry, state):
                                           'last_pk_fetched')
 
     if last_pk_fetched:
-        pk_comparisons = ["({} > {} AND {} <= {})".format(common.escape(pk),
-                                                          last_pk_fetched[pk],
-                                                          common.escape(pk),
-                                                          max_pk_values[pk])
-                          for pk in key_properties]
+        pk_comparisons = [
+            f"({common.escape(pk)} > {last_pk_fetched[pk]} AND {common.escape(pk)} <= {max_pk_values[pk]})"
+            for pk in key_properties]
     else:
-        pk_comparisons = ["{} <= {}".format(common.escape(pk), max_pk_values[pk])
-                          for pk in key_properties]
+        pk_comparisons = [f"{common.escape(pk)} <= {max_pk_values[pk]}" for pk in key_properties]
 
-    sql = " WHERE {} ORDER BY {} ASC".format(" AND ".join(pk_comparisons),
-                                             ", ".join(escaped_columns))
+    sql = f' WHERE {" AND ".join(pk_comparisons)} ORDER BY {", ".join(escaped_columns)} ASC'
 
     return sql
 
@@ -167,6 +163,7 @@ def sync_table(mysql_conn, catalog_entry, state, columns, stream_version):
 
             params = {}
 
+            # pylint:disable=duplicate-code
             common.sync_query(cur,
                               catalog_entry,
                               state,
