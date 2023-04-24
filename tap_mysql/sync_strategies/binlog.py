@@ -12,9 +12,6 @@ import pytz
 import singer
 import tzlocal
 
-import tap_mysql.sync_strategies.common as common
-import tap_mysql.connection as connection
-
 from typing import Dict, Set, Union, Optional, Any, Tuple
 from plpygis import Geometry
 from pymysqlreplication.constants import FIELD_TYPE
@@ -26,10 +23,12 @@ from pymysqlreplication.row_event import (
 )
 from singer import utils, Schema, metadata
 
+from tap_mysql import connection
 from tap_mysql.binlogstream import CustomBinlogStreamReader
-from tap_mysql.stream_utils import write_schema_message
-from tap_mysql.discover_utils import discover_catalog, desired_columns, should_run_discovery
 from tap_mysql.connection import connect_with_backoff, make_connection_wrapper, MySQLConnection
+from tap_mysql.discover_utils import discover_catalog, desired_columns, should_run_discovery
+from tap_mysql.stream_utils import write_schema_message
+from tap_mysql.sync_strategies import common
 
 LOGGER = singer.get_logger('tap_mysql')
 
@@ -182,10 +181,18 @@ def fetch_current_gtid_pos(
 
 
 def json_bytes_to_string(data):
-    if isinstance(data, bytes):  return data.decode()
-    if isinstance(data, dict):   return dict(map(json_bytes_to_string, data.items()))
-    if isinstance(data, tuple):  return tuple(map(json_bytes_to_string, data))
-    if isinstance(data, list):   return list(map(json_bytes_to_string, data))
+    if isinstance(data, bytes):
+        return data.decode()
+
+    if isinstance(data, dict):
+        return dict(map(json_bytes_to_string, data.items()))
+
+    if isinstance(data, tuple):
+        return tuple(map(json_bytes_to_string, data))
+
+    if isinstance(data, list):
+        return list(map(json_bytes_to_string, data))
+
     return data
 
 
@@ -639,7 +646,7 @@ def _run_binlog_sync(
                                      gtid_pos
                                      )
 
-        elif isinstance(binlog_event, MariadbGtidEvent) or isinstance(binlog_event, GtidEvent):
+        elif isinstance(binlog_event, (MariadbGtidEvent, GtidEvent)):
             gtid_pos = binlog_event.gtid
 
             LOGGER.debug('%s: gtid=%s',
