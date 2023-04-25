@@ -1,3 +1,8 @@
+1.5.3 (2023-04-25)
+------------------
+* LOG_BASED: Set mariadb slave capability to 4 to mitigate bug in Mariadb 10.6.12 (https://github.com/transferwise/pipelinewise-tap-mysql/pull/149)
+
+
 1.5.2 (2022-08-12)
 ------------------
 * Bump mysql-replication to 0.30
