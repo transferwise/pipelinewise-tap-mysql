@@ -6,7 +6,7 @@ import singer
 from singer import metadata
 
 from tap_mysql.connection import connect_with_backoff
-import tap_mysql.sync_strategies.common as common
+from tap_mysql.sync_strategies import common
 
 
 BOOKMARK_KEYS = {'replication_key', 'replication_key_value', 'version'}
@@ -63,7 +63,7 @@ def sync_table(mysql_conn, catalog_entry, state, columns):
 
                 params['replication_key_value'] = replication_key_value
             elif replication_key_metadata is not None:
-                select_sql += ' ORDER BY `{}` ASC'.format(replication_key_metadata)
+                select_sql += f' ORDER BY `{replication_key_metadata}` ASC'
 
             common.sync_query(cur,
                               catalog_entry,

@@ -12,12 +12,8 @@ import pytz
 import singer
 import tzlocal
 
-import tap_mysql.sync_strategies.common as common
-import tap_mysql.connection as connection
-
 from typing import Dict, Set, Union, Optional, Any, Tuple
 from plpygis import Geometry
-from pymysqlreplication import BinLogStreamReader
 from pymysqlreplication.constants import FIELD_TYPE
 from pymysqlreplication.event import RotateEvent, MariadbGtidEvent, GtidEvent
 from pymysqlreplication.row_event import (
@@ -25,11 +21,14 @@ from pymysqlreplication.row_event import (
     UpdateRowsEvent,
     WriteRowsEvent,
 )
-
 from singer import utils, Schema, metadata
-from tap_mysql.stream_utils import write_schema_message
-from tap_mysql.discover_utils import discover_catalog, desired_columns, should_run_discovery
+
+from tap_mysql import connection
+from tap_mysql.binlogstream import CustomBinlogStreamReader
 from tap_mysql.connection import connect_with_backoff, make_connection_wrapper, MySQLConnection
+from tap_mysql.discover_utils import discover_catalog, desired_columns, should_run_discovery
+from tap_mysql.stream_utils import write_schema_message
+from tap_mysql.sync_strategies import common
 
 LOGGER = singer.get_logger('tap_mysql')
 
@@ -182,10 +181,18 @@ def fetch_current_gtid_pos(
 
 
 def json_bytes_to_string(data):
-    if isinstance(data, bytes):  return data.decode()
-    if isinstance(data, dict):   return dict(map(json_bytes_to_string, data.items()))
-    if isinstance(data, tuple):  return tuple(map(json_bytes_to_string, data))
-    if isinstance(data, list):   return list(map(json_bytes_to_string, data))
+    if isinstance(data, bytes):
+        return data.decode()
+
+    if isinstance(data, dict):
+        return dict(map(json_bytes_to_string, data.items()))
+
+    if isinstance(data, tuple):
+        return tuple(map(json_bytes_to_string, data))
+
+    if isinstance(data, list):
+        return list(map(json_bytes_to_string, data))
+
     return data
 
 
@@ -584,7 +591,7 @@ def __get_diff_in_columns_list(
 # pylint: disable=R1702,R0915
 def _run_binlog_sync(
         mysql_conn: MySQLConnection,
-        reader: BinLogStreamReader,
+        reader: CustomBinlogStreamReader,
         binlog_streams_map: Dict,
         state: Dict,
         config: Dict,
@@ -639,7 +646,7 @@ def _run_binlog_sync(
                                      gtid_pos
                                      )
 
-        elif isinstance(binlog_event, MariadbGtidEvent) or isinstance(binlog_event, GtidEvent):
+        elif isinstance(binlog_event, (MariadbGtidEvent, GtidEvent)):
             gtid_pos = binlog_event.gtid
 
             LOGGER.debug('%s: gtid=%s',
@@ -786,7 +793,7 @@ def create_binlog_stream_reader(
         log_file: Optional[str],
         log_pos: Optional[int],
         gtid_pos: Optional[str]
-) -> BinLogStreamReader:
+) -> CustomBinlogStreamReader:
     """
     Create an instance of BinlogStreamReader with the right config
 
@@ -817,8 +824,8 @@ def create_binlog_stream_reader(
     }
 
     # only fetch events pertaining to the schemas in filter db.
-    if config.get('filter_db'):
-        kwargs['only_schemas'] = config['filter_db'].split(',')
+    if config.get('filter_dbs'):
+        kwargs['only_schemas'] = config['filter_dbs'].split(',')
 
     if config['use_gtid']:
 
@@ -844,7 +851,7 @@ def create_binlog_stream_reader(
         kwargs['log_pos'] = log_pos
         kwargs['resume_stream'] = True
 
-    return BinLogStreamReader(**kwargs)
+    return CustomBinlogStreamReader(**kwargs)
 
 
 def sync_binlog_stream(
@@ -880,14 +887,6 @@ def sync_binlog_stream(
         LOGGER.info('Current Master binlog file and pos: %s %s', end_log_file, end_log_pos)
 
         _run_binlog_sync(mysql_conn, reader, binlog_streams_map, state, config, end_log_file, end_log_pos)
-
-    except pymysql.err.OperationalError as ex:
-        if ex.args[0] == 1236:
-            LOGGER.error('Cannot resume logical replication from given GTID %s! This GTID might date back to before '
-                         'the new primary has been setup, connect to old primary and consume all binlog events to get '
-                         'a newer GTID then switch back.', gtid)
-
-        raise
 
     finally:
         # BinLogStreamReader doesn't implement the `with` methods
