@@ -1473,3 +1473,69 @@ class TestBitBooleanMapping(unittest.TestCase):
         with connect_with_backoff(self.conn) as open_conn:
             with open_conn.cursor() as cursor:
                 cursor.execute('DROP TABLE bit_booleans_table;')
+
+
+class TestTableSelector(unittest.TestCase):
+
+    def setUp(self):
+        self.conn = test_utils.get_test_connection()
+
+        with connect_with_backoff(self.conn) as open_conn:
+            with open_conn.cursor() as cursor:
+                cursor.execute("""
+                    CREATE TABLE table_1 (
+                        `id` int,
+                        a INTEGER)
+                """)
+                cursor.execute("""
+                    CREATE TABLE table_2 (
+                        `id_2` int,
+                        b INTEGER)
+                """)
+                cursor.execute("""
+                    INSERT INTO table_1(`id`,`a`) VALUES (1, 69)
+                """)
+                cursor.execute("""
+                    INSERT INTO table_2(`id_2`,`b`) VALUES (1, 70)
+                """)
+
+    def testSelectTable1Catalog(self):
+        catalog = tap_mysql.discover_catalog(
+            mysql_conn=self.conn,
+            tables='table_1'
+        )
+
+        self.assertEqual(len(catalog.streams), 1)
+        self.assertEqual(catalog.streams[0].table, 'table_1')
+
+    def testIncrementalSync(self):
+        catalog = tap_mysql.discover_catalog(
+            mysql_conn=self.conn,
+            tables='table_1'
+        )
+
+        self.assertEqual(len(catalog.streams), 1)
+        catalog.streams[0] = test_utils.set_replication_method_and_key(
+            stream=catalog.streams[0],
+            r_method='INCREMENTAL',
+            r_key='id'
+        )
+        catalog.streams[0] = test_utils.set_selected(catalog.streams[0], True)
+
+        global SINGER_MESSAGES
+        SINGER_MESSAGES.clear()
+
+        tap_mysql.do_sync(self.conn, {}, catalog, {})
+
+        record_messages = list(filter(lambda m: isinstance(m, singer.RecordMessage), SINGER_MESSAGES))
+
+        self.assertEqual(len(record_messages), 1)
+        self.assertListEqual([
+            {'id': 1, 'a': 69},
+        ], [rec.record for rec in record_messages])
+
+    def tearDown(self) -> None:
+        with connect_with_backoff(self.conn) as open_conn:
+            with open_conn.cursor() as cursor:
+                cursor.execute('DROP TABLE table_1;')
+                cursor.execute('DROP TABLE table_2;')
