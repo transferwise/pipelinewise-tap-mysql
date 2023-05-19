@@ -216,7 +216,7 @@ class TestBinlogSyncStrategy(TestCase):
         with patch('tap_mysql.sync_strategies.binlog.singer.write_message') as write_msg:
             write_msg.side_effect = lambda msg: singer_messages.append(msg)
 
-            with patch('tap_mysql.sync_strategies.binlog.BinlogStreamReader',
+            with patch('tap_mysql.sync_strategies.binlog.BinLogStreamReader',
                        autospec=True) as reader_mock:
                 def iter_mock(_):
                     log_files = [
@@ -996,7 +996,7 @@ class TestBinlogSyncStrategy(TestCase):
         with patch('tap_mysql.sync_strategies.binlog.singer.write_message') as write_msg:
             write_msg.side_effect = lambda msg: singer_messages.append(msg)
 
-            with patch('tap_mysql.sync_strategies.binlog.BinlogStreamReader',
+            with patch('tap_mysql.sync_strategies.binlog.BinLogStreamReader',
                        autospec=True) as reader_mock:
                 def iter_mock(_):
                     log_files = [
