@@ -472,6 +472,7 @@ GRANT ALL PRIVILEGES ON tap_mysql_test.* TO <mysql-user>;
   export TAP_MYSQL_PORT=<mysql-port>
   export TAP_MYSQL_USER=<mysql-user>
   export TAP_MYSQL_PASSWORD=<mysql-password>
+  export TAP_MYSQL_ENGINE=<engine>
 ```
 
 3. Install python test dependencies in a virtual env
