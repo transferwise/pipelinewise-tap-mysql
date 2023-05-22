@@ -1,3 +1,10 @@
+1.5.4 (2023-05-22)
+------------------
+* LOG_BASED: 
+   * Bump pymsql-replication from `0.30` to `0.40`
+   * Remove the custom BinlogStreamReader
+
+
 1.5.3 (2023-04-25)
 ------------------
 * LOG_BASED: Set mariadb slave capability to 4 to mitigate bug in Mariadb 10.6.12 (https://github.com/transferwise/pipelinewise-tap-mysql/pull/149)
