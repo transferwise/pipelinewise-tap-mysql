@@ -75,7 +75,7 @@ def generate_select_sql(catalog_entry, columns):
         # null bytes 0x00 and hexifying the column.
         if property_format == 'binary':
             escaped_columns.append(
-                f'hex(trim(trailing CHAR(0x00) from {escaped_col})) as {escaped_col}')
+                f'hex({escaped_col}) as {escaped_col}')
         elif property_format == 'spatial':
             escaped_columns.append(
                 f'ST_AsGeoJSON({escaped_col}) as {escaped_col}')
