@@ -1349,12 +1349,12 @@ class TestSupportedPK(unittest.TestCase):
 
         self.assertEqual(len(record_messages), 6)
         self.assertListEqual([
-            {'age': 25, 'good_pk': '61'},
-            {'age': 35, 'good_pk': '62'},
-            {'age': 35, 'good_pk': '63'},
-            {'age': 45, 'good_pk': '64'},
-            {'age': 16, 'good_pk': '65'},
-            {'age': 5, 'good_pk': '66'},
+            {'age': 25, 'good_pk': '61000000000000000000'},
+            {'age': 35, 'good_pk': '62000000000000000000'},
+            {'age': 35, 'good_pk': '63000000000000000000'},
+            {'age': 45, 'good_pk': '64000000000000000000'},
+            {'age': 16, 'good_pk': '65000000000000000000'},
+            {'age': 5, 'good_pk': '66000000000000000000'},
         ], [rec.record for rec in record_messages])
 
     def tearDown(self) -> None:
