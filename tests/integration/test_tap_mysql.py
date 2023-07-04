@@ -1322,10 +1322,10 @@ class TestSupportedPK(unittest.TestCase):
 
         self.assertEqual(len(record_messages), 4)
         self.assertListEqual([
-            {'age': 20, 'good_pk': '61'},
-            {'age': 30, 'good_pk': '62'},
-            {'age': 30, 'good_pk': '63'},
-            {'age': 40, 'good_pk': '64'},
+            {'age': 20, 'good_pk': '61000000000000000000'},
+            {'age': 30, 'good_pk': '62000000000000000000'},
+            {'age': 30, 'good_pk': '63000000000000000000'},
+            {'age': 40, 'good_pk': '64000000000000000000'},
         ], [rec.record for rec in record_messages])
 
         # get the last state message to be fed to the next sync
