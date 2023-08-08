@@ -1,3 +1,10 @@
+1.5.5 (2023-07-05)
+------------------
+* LOG_BASED: 
+   * Fix: `LookupError: unknown encoding: utf8mb3`
+   * Bump plpygis from `0.2.0` to `0.2.1`
+  
+
 1.5.4 (2023-05-22)
 ------------------
 * LOG_BASED: 
