@@ -1,3 +1,9 @@
+1.5.6 (2023-08-10)
+------------------
+* LOG_BASED, INCREMENTAL and FULL TABLE: 
+   * Zero-pad fixed-length binary fields
+
+
 1.5.5 (2023-07-05)
 ------------------
 * LOG_BASED: 
