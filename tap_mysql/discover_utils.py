@@ -1,6 +1,8 @@
 # pylint: disable=missing-docstring,too-many-locals
 
 import collections
+from decimal import Decimal, BasicContext, localcontext, Context
+
 import itertools
 import pendulum
 import pymysql
@@ -269,6 +271,19 @@ def schema_for_column(column):  # pylint: disable=too-many-branches
 
         if data_type == 'decimal':
             result.multipleOf = 10 ** (0 - column.numeric_scale)
+            # This is complex.
+            # Emax specifies the maximum allowable exponent.
+            # For example, with 10 digits, 3 after decimal place (7 before) we have:
+            # >>> setcontext(Context(prec=10, Emax=7))
+            # >>> Decimal('1.0E+7').next_minus()
+            # Decimal('9999999.999')
+            before_dp = column.numeric_precision-column.numeric_scale
+            with localcontext(Context(Emax=before_dp, prec=column.numeric_precision)):
+                largest_decimal = Decimal('1.0E+' + str(before_dp)).next_minus()
+
+            result.maximum = float(largest_decimal)
+            # TODO: Unsigned.
+            result.minimum = float(-largest_decimal)
 
     elif data_type in JSON_TYPES:
         result.type = ['null', 'object']
