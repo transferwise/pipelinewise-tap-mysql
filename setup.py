@@ -28,7 +28,7 @@ setup(name='pipelinewise-tap-mysql',
       extras_require={
           'test': [
               'nose==1.3.*',
-              'pylint==2.13.2',
+              'pylint==3.0.1',
               'nose-cov==1.6'
           ]
       },
