@@ -4,6 +4,7 @@ import copy
 import datetime
 import singer
 import time
+import json
 
 from singer import metadata, utils, metrics
 
@@ -117,6 +118,9 @@ def row_to_singer_record(catalog_entry, version, row, columns, time_extracted):
             else:
                 boolean_representation = True
             row_to_persist += (boolean_representation,)
+
+        elif 'object' in property_type or property_type == 'object':
+            row_to_persist += (json.loads(elem),)
 
         else:
             row_to_persist += (elem,)
