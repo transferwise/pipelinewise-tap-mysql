@@ -120,7 +120,10 @@ def row_to_singer_record(catalog_entry, version, row, columns, time_extracted):
             row_to_persist += (boolean_representation,)
 
         elif 'object' in property_type or property_type == 'object':
-            row_to_persist += (json.loads(elem),)
+            if not elem:
+                row_to_persist += (None,)
+            else:
+                row_to_persist += (json.loads(elem),)
 
         else:
             row_to_persist += (elem,)
