@@ -7,7 +7,7 @@ import os
 from collections import namedtuple
 from typing import Dict
 from unittest import TestCase
-from unittest.mock import patch, Mock, call, MagicMock, PropertyMock
+from unittest.mock import patch, Mock, call, MagicMock
 
 from pymysql import InternalError
 from pymysql.cursors import Cursor

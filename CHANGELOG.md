@@ -1,3 +1,33 @@
+1.5.6 (2023-08-10)
+------------------
+* LOG_BASED, INCREMENTAL and FULL TABLE: 
+   * Zero-pad fixed-length binary fields
+
+
+1.5.5 (2023-07-05)
+------------------
+* LOG_BASED: 
+   * Fix: `LookupError: unknown encoding: utf8mb3`
+   * Bump plpygis from `0.2.0` to `0.2.1`
+  
+
+1.5.4 (2023-05-22)
+------------------
+* LOG_BASED: 
+   * Bump pymsql-replication from `0.30` to `0.40`
+   * Remove the custom BinlogStreamReader
+
+
+1.5.3 (2023-04-25)
+------------------
+* LOG_BASED: Set mariadb slave capability to 4 to mitigate bug in Mariadb 10.6.12 (https://github.com/transferwise/pipelinewise-tap-mysql/pull/149)
+
+
+1.5.2 (2022-08-12)
+------------------
+* Bump mysql-replication to 0.30
+
+
 1.5.1 (2022-04-04)
 ------------------
 * Fix: Handle case when BINLOG_GTID_POS returns multiple comma separated GTIDs
