@@ -122,6 +122,7 @@ class MySQLConnection(pymysql.connections.Connection):
                 "ca": "./ca.pem",
                 "cert": "./cert.pem",
                 "key": "./key.pem",
+                "check_hostname": config.get("check_hostname", "true")
             }
 
             # override match hostname for google cloud
