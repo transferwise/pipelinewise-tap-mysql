@@ -81,6 +81,9 @@ List of config parameters:
 | ssl_ca            | string                        | No       | -                                                                                                                                                                 | for self-signed SSL                                                                                                       |
 | ssl_cert          | string                        | No       | -                                                                                                                                                                 | for self-signed SSL                                                                                                       |
 | ssl_key           | string                        | No       | -                                                                                                                                                                 | for self-signed SSL                                                                                                       |
+| check_hostname    | string                        | No       | -
+                      | Whether or not to enforce strict host name checking on the SSL certificate
+
 | internal_hostname | string | No       | -                                                                                                                                                                 | Override match hostname for google cloud                                                                                  |
 | session_sqls      | List of strings               | No       | ```['SET @@session.time_zone="+0:00"', 'SET @@session.wait_timeout=28800', 'SET @@session.net_read_timeout=3600', 'SET @@session.innodb_lock_wait_timeout=3600']``` | Set session variables dynamically.                                                                                        |
 
