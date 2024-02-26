@@ -58,7 +58,7 @@ def sync_table(mysql_conn, catalog_entry, state, columns):
                 if catalog_entry.schema.properties[replication_key_metadata].format == 'date-time':
                     replication_key_value = pendulum.parse(replication_key_value)
 
-                select_sql += f" WHERE `{replication_key_metadata}` >= %(replication_key_value)s " \
+                select_sql += f" WHERE `{replication_key_metadata}` > %(replication_key_value)s " \
                               f"ORDER BY `{replication_key_metadata}` ASC"
 
                 params['replication_key_value'] = replication_key_value
