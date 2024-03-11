@@ -91,6 +91,8 @@ class MySQLConnection(pymysql.connections.Connection):
             "cursorclass": config.get("cursorclass") or pymysql.cursors.SSCursor,
             "connect_timeout": CONNECT_TIMEOUT_SECONDS,
             "charset": "utf8",
+            "read_timeout": 60,
+            "write_timeout": 60
         }
 
         ssl_arg = None
@@ -122,6 +124,7 @@ class MySQLConnection(pymysql.connections.Connection):
                 "ca": "./ca.pem",
                 "cert": "./cert.pem",
                 "key": "./key.pem",
+                "check_hostname": config.get("check_hostname", "true")
             }
 
             # override match hostname for google cloud

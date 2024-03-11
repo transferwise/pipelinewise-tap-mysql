@@ -46,6 +46,7 @@ def pks_are_auto_incrementing(mysql_conn, catalog_entry):
     with connect_with_backoff(mysql_conn) as open_conn:
         with open_conn.cursor() as cur:
             for primary_key in key_properties:
+                open_conn.ping(reconnect=True)
                 cur.execute(sql.format(database_name,
                                        catalog_entry.table,
                                        primary_key))
