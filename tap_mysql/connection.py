@@ -93,7 +93,7 @@ class MySQLConnection(pymysql.connections.Connection):
             "charset": "utf8",
         }
 
-        ssl_arg = None
+        ssl_arg = {"": True}
 
         if config.get("database"):
             args["database"] = config["database"]
