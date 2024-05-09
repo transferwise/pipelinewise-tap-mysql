@@ -809,7 +809,7 @@ def create_binlog_stream_reader(
         server_id = int(config.get('server_id'))
         LOGGER.info("Using provided server_id=%s", server_id)
     else:
-        server_id = random.randint(1, 2 ^ 32)  # generate random server id for this slave
+        server_id = random.randint(1, 2 ** 32 - 1)  # generate random server id for this slave
         LOGGER.info("Using randomly generated server_id=%s", server_id)
 
     engine = config['engine']
