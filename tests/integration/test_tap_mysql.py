@@ -1272,7 +1272,7 @@ class TestJsonTables(unittest.TestCase):
 
         record_message = list(filter(lambda m: isinstance(m, singer.RecordMessage), SINGER_MESSAGES))[0]
         self.assertTrue(isinstance(record_message, singer.RecordMessage))
-        self.assertEqual(record_message.record, {'val': '{"a": 10, "b": "c"}'})
+        self.assertEqual(record_message.record, {'val': {'a': 10, 'b': 'c'}})
 
 
 class TestSupportedPK(unittest.TestCase):
