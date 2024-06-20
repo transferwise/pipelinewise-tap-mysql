@@ -53,7 +53,7 @@ FLOAT_TYPES = {'float', 'double', 'decimal'}
 
 DATETIME_TYPES = {'datetime', 'timestamp', 'time', 'date'}
 
-BINARY_TYPES = {'binary', 'varbinary'}
+BINARY_TYPES = {'binary', 'varbinary', 'tinyblob', 'blob', 'mediumblob', 'longblob'}
 
 SPATIAL_TYPES = {'geometry', 'point', 'linestring',
                  'polygon', 'multipoint', 'multilinestring',
