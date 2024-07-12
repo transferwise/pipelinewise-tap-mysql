@@ -352,7 +352,7 @@ def resolve_catalog(discovered_catalog, streams_to_sync):
             table=catalog_entry.table,
             schema=Schema(
                 type='object',
-                properties={col: discovered_table.schema.properties[col]
+                properties={col: catalog_entry.schema.properties[col]
                             for col in columns}
             )
         ))
