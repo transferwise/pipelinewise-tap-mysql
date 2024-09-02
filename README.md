@@ -1,3 +1,10 @@
+# Notice
+To better serve Wise business and customer needs, the PipelineWise codebase needs to shrink.
+We have made the difficult decision that, going forward many components of PipelineWise will be removed or incorporated in the main repo.
+The last version before this decision is [v0.64.1](https://github.com/transferwise/pipelinewise/tree/v0.64.1)
+
+We thank all in the open-source community, that over the past 6 years, have helped to make PipelineWise a robust product for heterogeneous replication of many many Terabytes, daily
+
 # pipelinewise-tap-mysql
 
 [![PyPI version](https://badge.fury.io/py/pipelinewise-tap-mysql.svg)](https://badge.fury.io/py/pipelinewise-tap-mysql)
@@ -197,7 +204,7 @@ $ tap-mysql -c config.json --discover > properties.json
 ```
 
 Then edit `properties.json` to make selections. In this example we want the
-`animals` table. The stream's metadata entry (associated with `"breadcrumb": []`) 
+`animals` table. The stream's metadata entry (associated with `"breadcrumb": []`)
 gets a top-level `selected` flag, as does its columns' metadata entries. Additionally,
 we will mark the `animals` table to replicate using a `FULL_TABLE` strategy. For more,
 information, see [Replication methods and state file](#replication-methods-and-state-file).
@@ -287,23 +294,23 @@ resultant stream of JSON data can be consumed by a Singer target.
 
 ## Replication methods and state file
 
-In the above example, we invoked `tap-mysql` without providing a _state_ file and without specifying a replication 
+In the above example, we invoked `tap-mysql` without providing a _state_ file and without specifying a replication
 method. The ways to replicate a given table are `FULL_TABLE`, `LOG_BASED` and `INCREMENTAL`.
 
 ### LOG_BASED
 
-LOG_BASED replication makes use of the server's binary logs (binlogs), this method can work with primary 
-servers, the tap acts as a replica and requests the primary to stream log events,the tap then consumes events 
+LOG_BASED replication makes use of the server's binary logs (binlogs), this method can work with primary
+servers, the tap acts as a replica and requests the primary to stream log events,the tap then consumes events
 pertaining to row changes (inserts, updates, deletes), binlog file rotate and gtid events.
 
-Log_based method always requires an initial sync to get a snapshot of the table and current binlog coordinates/gtid 
+Log_based method always requires an initial sync to get a snapshot of the table and current binlog coordinates/gtid
 position.
 
-The tap support two ways of consuming log events: using binlog coordinates or GTID, the default behavior is using 
-binlog coordinates, when turning the `use_gtid` flag, you have to specify the engine flavor (mariadb/mysql) due to 
+The tap support two ways of consuming log events: using binlog coordinates or GTID, the default behavior is using
+binlog coordinates, when turning the `use_gtid` flag, you have to specify the engine flavor (mariadb/mysql) due to
 how different are the GTID implementations in these two engines.
 
-When enabling the `use_gtid` flag and the engine is MariaDB, the tap will dynamically infer the GTID pos from 
+When enabling the `use_gtid` flag and the engine is MariaDB, the tap will dynamically infer the GTID pos from
 existing binlog coordinate in the state, if the engine is mysql, it will fail.
 
 #### State when using binlog coordinates
