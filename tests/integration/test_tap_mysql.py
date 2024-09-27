@@ -84,7 +84,10 @@ class TestTypeMapping(unittest.TestCase):
         self.assertEqual(self.schema.properties['c_decimal'],
                          Schema(['null', 'number'],
                                 inclusion='available',
-                                multipleOf=1))
+                                multipleOf=1,
+                                maximum=float('9'*10),  # Default is DECIMAL(10,0)
+                                minimum=-float('9'*10),
+                                ))
         self.assertEqual(self.get_metadata_for_column('c_decimal'),
                          {'selected-by-default': True,
                           'sql-datatype': 'decimal(10,0)',
@@ -94,7 +97,10 @@ class TestTypeMapping(unittest.TestCase):
         self.assertEqual(self.schema.properties['c_decimal_2_unsigned'],
                          Schema(['null', 'number'],
                                 inclusion='available',
-                                multipleOf=0.01))
+                                multipleOf=0.01,
+                                maximum=float('9'*3 + '.99'),
+                                minimum=0
+                                ),)
         self.assertEqual(self.get_metadata_for_column('c_decimal_2_unsigned'),
                          {'selected-by-default': True,
                           'sql-datatype': 'decimal(5,2) unsigned',
@@ -104,7 +110,10 @@ class TestTypeMapping(unittest.TestCase):
         self.assertEqual(self.schema.properties['c_decimal_2'],
                          Schema(['null', 'number'],
                                 inclusion='available',
-                                multipleOf=0.01))
+                                multipleOf=0.01,
+                                maximum=float('9'*9 + '.99'),
+                                minimum=-float('9'*9 + '.99'),
+                                ))
         self.assertEqual(self.get_metadata_for_column('c_decimal_2'),
                          {'selected-by-default': True,
                           'sql-datatype': 'decimal(11,2)',
